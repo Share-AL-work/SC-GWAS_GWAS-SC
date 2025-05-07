@@ -80,7 +80,7 @@ Rscript bin/07_cauchy_combine.R  config.yml
 # --> results/pvalue_cauchy_combined.tsv
 ################################################################################
 echo "✓ Pipeline finished — meta P‑values in results/pvalue_cauchy_combined.tsv"
-
+```
 
 ####  Code and data to reproduce results of the paper is coming soon...
 
