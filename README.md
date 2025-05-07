@@ -7,6 +7,14 @@ This repo ties together:
 * **Continuous‑sLDSC** (Bash + R around pascaltimshel/ldsc @ d869cfd)  
 * **MAGMA‑GSEA**(binary annotation,unmodified fork of <https://github.com/jbryois/scRNA_disease>),
 
+## 0.1.Preprocess the GWAS summary data:
+* COJO format: follow the section in https://github.com/zlintian/SBayesRC_pipeline
+* LDSC format: follow https://github.com/perslab/CELLECT/wiki/CELLECT-LDSC-Tutorial#step-0-create-conda-environment-for-munging
+
+## 0.2.Preprocess the sc(n)RNAseq data:
+You can find full details of the preprocessing step in the [preprocess documentation](./preprocess/*).
+
+
 All absolute paths are replaced by a single editable `config.yml`.
 
 #### Quick start (all stages)
