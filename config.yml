@@ -1,7 +1,12 @@
+# directory roots (relative or absolute, user edits here only)
 paths:
-  data_root:      /ABS/PATH/TO/data          # <-- user edits
-  results_root:   /ABS/PATH/TO/results
-  ref:            ref/
+  ref:           ref/                           # 1000G, weights, baseline, genes
+  gwas:          data/gwas/
+  scdata:        data/singlecell/               # .h5ad or .rds
+  metrics_csv:   data/metrics_csv/              # raw metric matrices
+  metrics_bed:   data/metrics_bed/              # output of csv→bed
+  results:       results/
+
 window_kb: 100
 n_quantiles: 5
 n_ctrl_scdrs: 1000
