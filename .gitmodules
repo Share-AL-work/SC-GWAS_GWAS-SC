@@ -1,0 +1,6 @@
+[submodule "external/ldsc"]
+	path = external/ldsc
+	url = https://github.com/pascaltimshel/ldsc.git
+[submodule "external/scRNA_disease"]
+	path = external/scRNA_disease
+	url = https://github.com/jbryois/scRNA_disease.git

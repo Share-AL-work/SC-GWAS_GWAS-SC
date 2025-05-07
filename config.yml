@@ -1,0 +1,10 @@
+paths:
+  data_root:      /ABS/PATH/TO/data          # <-- user edits
+  results_root:   /ABS/PATH/TO/results
+  ref:            ref/
+window_kb: 100
+n_quantiles: 5
+n_ctrl_scdrs: 1000
+gene_coord: ref/gene_coordinates.GRCh37.ensembl_v91.txt 
+gwas: [EA3_Lee2018, BMI_Yengo2018]
+singlecell_datasets: [Cheng_2018, Smillie_2019]
