@@ -1,4 +1,4 @@
-# SC-GWAS:GWAS-SC pipeline (skeleton)
+# SC-GWAS:GWAS-SC pipeline
 This repo ties together:
 
 * **Binary‑sLDSC** (unmodified fork of <https://github.com/jbryois/scRNA_disease>)  
@@ -10,8 +10,8 @@ All absolute paths are replaced by a single editable `config.yml`.
 #### Quick start (all stages)
 
 ```bash
-git clone --recurse-submodules https://github.com/Share-AL-work/SC-GWAS:GWAS-SC.git
-cd SC-GWAS:GWAS-SC
+git clone --recurse-submodules https://github.com:Share-AL-work/SC-GWAS_GWAS-SC.git
+cd SC-GWAS_GWAS-SC
 conda env create -f envs/ldsctools.yml
 conda activate ldsctools
 ################################################################################
@@ -22,13 +22,13 @@ conda env create -f envs/ldsctools.yml   # R + python2 + bedtools + gcta
 conda env create -f envs/scdrs.yml       # scDRS / scanpy stack
 
 ################################################################################
-# 1.  Compute metrics  (repeat with any metric flag you want)
+# 1.  Compute metrics  (repeat with any metric you want, even with new metrics)
 ################################################################################
 conda activate metrics_env
 
 bin/01_metrics.sh  config.yml  cepo      # Cepo
 bin/01_metrics.sh  config.yml  cellex    # DET/NSI/GES/EP/ESmu
-bin/01_metrics.sh  config.yml  tdep      # Top‑decile expression
+bin/01_metrics.sh  config.yml  tdep      # Top‑decile EP
 bin/01_metrics.sh  config.yml  sclinker  # sc‑linker gene programs
 
 ################################################################################
@@ -53,7 +53,9 @@ bin/03_ldsc_continuous.sh  config.yml
 bin/04_magma_gsea.sh  config.yml      # (creates results/magma/...)
 
 ################################################################################
-# 5.  mBAT‑combo gene‑level test
+# 5.  mBAT‑combo 
+# Manual of mBAT-combo:
+# https://yanglab.westlake.edu.cn/software/gcta/#mBAT-combo
 ################################################################################
 bin/05_mbat_combo.sh   config.yml     # *.gene.assoc.mbat into results/mbat
 
@@ -61,13 +63,15 @@ bin/05_mbat_combo.sh   config.yml     # *.gene.assoc.mbat into results/mbat
 bin/05b_mbat_to_gs.sh  config.yml     # results/scdrs_gs/<trait>.gs
 
 ################################################################################
-# 6.  scDRS enrichment (uses .gs from 5b)
+# 6.  scDRS (uses .gs from 5b)
+# Manual of scDRS:
+# https://martinjzhang.github.io/scDRS/
 ################################################################################
 conda activate scdrs_env
 bin/06_scdrs.sh        config.yml     # results/scdrs_scores/...
 
 ################################################################################
-# 7.  Meta‑analysis: Cauchy combination (LDSC + MAGMA + scDRS)
+# 7.  Cauchy combination (LDSC + MAGMA + scDRS)
 ################################################################################
 conda activate metrics_env
 Rscript bin/07_cauchy_combine.R  config.yml
