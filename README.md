@@ -1,9 +1,11 @@
 # SC-GWAS:GWAS-SC pipeline
 This repo ties together:
 
+* **a Cauchy combination **analysis layer for below:
+* **mBAT‑combo based scDRS**
 * **Binary‑sLDSC** (unmodified fork of <https://github.com/jbryois/scRNA_disease>)  
 * **Continuous‑sLDSC** (Bash + R around pascaltimshel/ldsc @ d869cfd)  
-* **MAGMA‑GSEA, mBAT‑combo, scDRS** and a Cauchy meta‑analysis layer
+* **MAGMA‑GSEA(binary annotation,unmodified fork of <https://github.com/jbryois/scRNA_disease>),
 
 All absolute paths are replaced by a single editable `config.yml`.
 
@@ -78,3 +80,33 @@ Rscript bin/07_cauchy_combine.R  config.yml
 # --> results/pvalue_cauchy_combined.tsv
 ################################################################################
 echo "✓ Pipeline finished — meta P‑values in results/pvalue_cauchy_combined.tsv"
+
+
+####  Code and data to reproduce results of the paper is coming soon...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
