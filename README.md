@@ -12,7 +12,7 @@ This repo ties together:
 * LDSC format: follow https://github.com/perslab/CELLECT/wiki/CELLECT-LDSC-Tutorial#step-0-create-conda-environment-for-munging
 
 ## 0.2.Preprocess the sc(n)RNAseq data:
-You can find full details of the preprocessing step in the [preprocess documentation](./preprocess/*).
+You can find full details of the preprocessing step in the [preprocess documentation](https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/tree/main/preprocess).
 
 
 All absolute paths are replaced by a single editable `config.yml`.
