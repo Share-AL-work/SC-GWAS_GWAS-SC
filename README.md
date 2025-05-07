@@ -1,11 +1,11 @@
 # SC-GWAS:GWAS-SC pipeline
 This repo ties together:
 
-* **a Cauchy combination **analysis layer for below:
+* **a Cauchy combination analysis layer for below:**
 * **mBAT‑combo based scDRS**
 * **Binary‑sLDSC** (unmodified fork of <https://github.com/jbryois/scRNA_disease>)  
 * **Continuous‑sLDSC** (Bash + R around pascaltimshel/ldsc @ d869cfd)  
-* **MAGMA‑GSEA(binary annotation,unmodified fork of <https://github.com/jbryois/scRNA_disease>),
+* **MAGMA‑GSEA**(binary annotation,unmodified fork of <https://github.com/jbryois/scRNA_disease>),
 
 All absolute paths are replaced by a single editable `config.yml`.
 
