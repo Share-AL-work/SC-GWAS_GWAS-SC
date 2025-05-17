@@ -90,7 +90,7 @@ Rscript bin/07_cauchy_combine.R  config.yml
 echo "✓ Pipeline finished — meta P‑values in results/pvalue_cauchy_combined.tsv"
 ```
 
-## 4.Code to reproduce results of the paper is in Replicates_paper directory (https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/Replicates_paper)
+## 4.Code to reproduce results of the paper is in [Replicates paper documents](https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/tree/main/Replicates_paper)
 
 
 
