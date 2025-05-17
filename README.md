@@ -17,7 +17,7 @@ You can find full details of the preprocessing step in the [preprocess documenta
 
 All absolute paths are replaced by a single editable `config.yml`.
 
-#### Quick start (all stages) with install
+#### Quick start (all stages) with Installation
 
 ```bash
 git clone --recurse-submodules https://github.com:Share-AL-work/SC-GWAS_GWAS-SC.git
