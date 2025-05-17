@@ -7,17 +7,17 @@ This repo ties together:
 * **Continuous‑sLDSC** (Bash + R around pascaltimshel/ldsc @ d869cfd)  
 * **MAGMA‑GSEA**(binary annotation,unmodified fork of <https://github.com/jbryois/scRNA_disease>)
 
-## 1.Preprocess the GWAS summary data:
+## 1. Preprocess the GWAS summary data:
 * COJO format: follow the section in https://github.com/zlintian/SBayesRC_pipeline
 * LDSC format: follow https://github.com/perslab/CELLECT/wiki/CELLECT-LDSC-Tutorial#step-0-create-conda-environment-for-munging
 
-## 2.Preprocess the sc(n)RNAseq data:
+## 2. Preprocess the sc(n)RNAseq data:
 You can find full details of the preprocessing step in the [preprocess documentation](https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/tree/main/preprocess).
 
 
 All absolute paths are replaced by a single editable `config.yml`.
 
-## 3.Quick start (all stages) with Installation:
+## 3. Quick start (all stages) with Installation:
 
 ```bash
 git clone --recurse-submodules https://github.com:Share-AL-work/SC-GWAS_GWAS-SC.git
@@ -90,7 +90,8 @@ Rscript bin/07_cauchy_combine.R  config.yml
 echo "✓ Pipeline finished — meta P‑values in results/pvalue_cauchy_combined.tsv"
 ```
 
-## 4.Code to reproduce results of the paper is in [Replicates paper documents](https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/tree/main/Replicates_paper)
+## 4. Code to reproduce results of the paper:
+* **[Replicates paper documents](https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/tree/main/Replicates_paper)
 
 
 
