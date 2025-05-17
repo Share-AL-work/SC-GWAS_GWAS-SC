@@ -1,0 +1,735 @@
+
+scp -r ~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/One_side_MG_con_scripts_improve uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/
+
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/geneset_res/cepo_s_MAGMAgeneset_continuous_oneside_results.txt ~/Manuscript_Ang/Benchmark_comparison/
+
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/geneset_res/sclinker_s_MAGMAgeneset_continuous_oneside_results.txt ~/Manuscript_Ang/Benchmark_comparison/
+
+
+
+# Step1: Convert the format of annotation for CELLEX to MAGMA-geneset
+```{r}
+
+library(data.table)
+
+# Define the directories and lists
+dir <- "/scratch/user/uqali4/Cepo_esw/"
+metrics_dirs <- c("Cepo_s")
+prefix_list <- c(
+  "2019_Smillie_normal_cellxgene",
+  "2019_Smillie_normal_cellxgene_pc",
+  "Cheng_2018_Cell_Reports_updated",
+  "Cheng_2018_Cell_Reports_pc",
+  "FBM_Jardine_2021_Nature",
+  "FBM_Jardine_2021_Nature_pc",
+  "human_liver_atlas_Guilliams_2022_cell",
+  "human_liver_atlas_Guilliams_2022_cell_pc",
+  "TMS_pc_ortholog_with_TS_minCell20",
+  "TabulaSapiens_pc_ortholog_with_TMS_minCell20",
+  "Fasolino_2022_Nat_Metab_normal_only",
+  "Fasolino_2022_Nat_Metab_normal_only_pc",
+  "CARE_snRNA_Heart_expr_gene_withPos",
+  "CARE_snRNA_Heart_pc",
+  "HLCA_core_healthy_LP_expr_gene_withPos",
+  "HLCA_core_healthy_LP_pc",
+  "Kamath_2022_normal_expr_gene_withPos",
+  "Kamath_2022_normal_pc"
+)
+
+
+
+# Loop through each prefix and metric
+for (prefix in prefix_list) {
+  for (metrics in metrics_dirs) {
+    
+    # Construct the file path for reading
+    input_file <- paste0(dir,"cepo_norm_", prefix,".", metrics, ".csv")
+    
+    # Read the CSV file
+    df <- fread(input_file)
+    
+    # Construct the output file path
+    output_file <- paste0("/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/", prefix, ".", metrics, ".csv")
+    
+    # Write the data frame to the new file
+    write.table(df, output_file, sep = "\t", row.names = FALSE, quote = FALSE)
+   
+  }
+}
+
+#########################################################################################################################################################
+
+#########################################################################################################################################################
+library(data.table)
+
+dir <- "/scratch/user/uqali4/sclinker_esw/"
+metrics_dirs <- c("sclinker_s")
+prefix_list <- c(
+  "2019_Smillie_normal_cellxgene",
+  "2019_Smillie_normal_cellxgene_pc",
+  "Cheng_2018_Cell_Reports_updated",
+  "Cheng_2018_Cell_Reports_pc",
+  "FBM_Jardine_2021_Nature",
+  "FBM_Jardine_2021_Nature_pc",
+  "human_liver_atlas_Guilliams_2022_cell",
+  "human_liver_atlas_Guilliams_2022_cell_pc",
+  "tms_facs_1to1",
+  "ts_pc_1to1",
+  "Fasolino_2022_Nat_Metab_normal_only",
+  "Fasolino_2022_Nat_Metab_normal_only_pc",
+  "CARE_all_genes",
+  "CARE_pc_only",
+  "HCLA_LP_allgenes",  
+  "HCLA_LP_pc",
+  "Kamath_allgenes",
+  "Kamath_pc_only"
+)
+
+
+
+# Loop through each prefix and metric
+for (prefix in prefix_list) {
+  for (metrics in metrics_dirs) {
+    
+    # Construct the file path for reading
+    input_file <- paste0(dir,prefix,".", metrics, ".csv")
+    
+    # Read the CSV file
+    df <- fread(input_file)
+    
+    # Construct the output file path
+    output_file <- paste0("/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/", prefix, ".", metrics, ".csv")
+    
+    # Write the data frame to the new file
+    write.table(df, output_file, sep = "\t", row.names = FALSE, quote = FALSE)
+   
+  }
+}
+
+```
+
+# Step2: Generate a list of files for all genes organ with one side for Cepo_s
+
+```{r}
+
+# Define prefixes
+prefix_list <- c("2019_Smillie_normal_cellxgene",
+                 "CARE_snRNA_Heart_expr_gene_withPos",
+                 "Cheng_2018_Cell_Reports_updated", 
+                 "Fasolino_2022_Nat_Metab_normal_only",
+                 "HLCA_core_healthy_LP_expr_gene_withPos",
+                 "FBM_Jardine_2021_Nature",
+                 "human_liver_atlas_Guilliams_2022_cell",
+                 "Kamath_2022_normal_expr_gene_withPos")
+
+# Define metrics
+metrics_dirs <- c("Cepo_s")
+
+# Directory for generated scripts
+output_dir <- "~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/One_side_MG_con_scripts_improve/"
+
+# Template for bash script
+template <- "#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=%s_cepo_s_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%%A_%%a.error
+#SBATCH --output=slurm_%%A_%%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE=\"/QRISdata/Q5729/job_list.txt\"
+trait=$(sed -n \"${i}p\" $TASKFILE)
+trait=$(echo \"$trait\" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo \"Trimmed Trait: '$trait'\"
+echo ${i}
+trait_magma_dir=\"/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes\"
+metrics_dirs=(%s) 
+for dir_name in \"${metrics_dirs[@]}\"; do
+  COVAR_FILE=\"/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/%s.${dir_name}.csv\"
+  mkdir -p /scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}
+  new_res_dir=\"/scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}\"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --gene-covar $COVAR_FILE --model direction=pos --out $new_res_dir/${trait}
+done
+"
+
+# Function to generate bash script for each prefix
+generate_script <- function(prefix, metrics_dirs, output_dir) {
+  # Format the metrics_dirs array for bash
+  metrics_str <- paste(metrics_dirs, collapse=" ")
+  
+  # Generate the script content by replacing the placeholders
+  script_content <- sprintf(template, prefix, metrics_str, prefix, prefix, prefix)
+  
+  # Define the output file name
+  script_file <- file.path(output_dir, paste0(prefix, "_cepo_s_magma_geneset_benchmark.sh"))
+  
+  # Write the script to a file
+  writeLines(script_content, script_file)
+  
+  # Output message to indicate the file is written
+  cat("Generated script for:", prefix, "\n")
+}
+
+# Generate the scripts for each prefix
+for (prefix in prefix_list) {
+  generate_script(prefix, metrics_dirs, output_dir)
+}
+
+```
+
+# Step2: Generate a list of files for all genes organ with one side for sclinker_s
+
+```{r}
+
+# Define prefixes
+prefix_list <- c("2019_Smillie_normal_cellxgene",
+                 "CARE_all_genes",
+                 "Cheng_2018_Cell_Reports_updated", 
+                 "Fasolino_2022_Nat_Metab_normal_only",
+                 "HCLA_LP_allgenes",
+                 "FBM_Jardine_2021_Nature",
+                 "human_liver_atlas_Guilliams_2022_cell",
+                 "Kamath_allgenes")
+
+# Define metrics
+metrics_dirs <- c("sclinker_s")
+
+# Directory for generated scripts
+output_dir <- "~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/One_side_MG_con_scripts_improve/"
+
+# Template for bash script
+template <- "#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=%s_sclinker_s_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%%A_%%a.error
+#SBATCH --output=slurm_%%A_%%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE=\"/QRISdata/Q5729/job_list.txt\"
+trait=$(sed -n \"${i}p\" $TASKFILE)
+trait=$(echo \"$trait\" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo \"Trimmed Trait: '$trait'\"
+echo ${i}
+trait_magma_dir=\"/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes\"
+metrics_dirs=(%s) 
+for dir_name in \"${metrics_dirs[@]}\"; do
+  COVAR_FILE=\"/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/%s.${dir_name}.csv\"
+  mkdir -p /scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}
+  new_res_dir=\"/scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}\"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --gene-covar $COVAR_FILE --model direction=pos --out $new_res_dir/${trait}
+done
+"
+
+# Function to generate bash script for each prefix
+generate_script <- function(prefix, metrics_dirs, output_dir) {
+  # Format the metrics_dirs array for bash
+  metrics_str <- paste(metrics_dirs, collapse=" ")
+  
+  # Generate the script content by replacing the placeholders
+  script_content <- sprintf(template, prefix, metrics_str, prefix, prefix, prefix)
+  
+  # Define the output file name
+  script_file <- file.path(output_dir, paste0(prefix, "_sclinker_s_magma_geneset_benchmark.sh"))
+  
+  # Write the script to a file
+  writeLines(script_content, script_file)
+  
+  # Output message to indicate the file is written
+  cat("Generated script for:", prefix, "\n")
+}
+
+# Generate the scripts for each prefix
+for (prefix in prefix_list) {
+  generate_script(prefix, metrics_dirs, output_dir)
+}
+
+```
+
+# Step2: Generate a list of files for PC organn for Cepo_s with one side 
+```{r}
+# Define prefixes
+prefix_list <- c("HLCA_core_healthy_LP_pc",
+                 "2019_Smillie_normal_cellxgene_pc",
+                 "CARE_snRNA_Heart_pc",
+                 "Cheng_2018_Cell_Reports_pc", 
+                 "Fasolino_2022_Nat_Metab_normal_only_pc",
+                 "FBM_Jardine_2021_Nature_pc",
+                 "human_liver_atlas_Guilliams_2022_cell_pc",
+                 "Kamath_2022_normal_pc")
+
+# Define metrics
+metrics_dirs <- c("Cepo_s")
+
+# Directory for generated scripts
+output_dir <- "~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/One_side_MG_con_scripts_improve/"
+
+# Template for bash script
+template <- "#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=%s_cepo_s_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%%A_%%a.error
+#SBATCH --output=slurm_%%A_%%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE=\"/QRISdata/Q5729/job_list.txt\"
+trait=$(sed -n \"${i}p\" $TASKFILE)
+trait=$(echo \"$trait\" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo \"Trimmed Trait: '$trait'\"
+echo ${i}
+trait_magma_dir=\"/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc\"
+metrics_dirs=(%s) 
+for dir_name in \"${metrics_dirs[@]}\"; do
+  COVAR_FILE=\"/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/%s.${dir_name}.csv\"
+  mkdir -p /scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}
+  new_res_dir=\"/scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}\"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --gene-covar $COVAR_FILE --model direction=pos --out $new_res_dir/${trait}
+done
+"
+
+# Function to generate bash script for each prefix
+generate_script <- function(prefix, metrics_dirs, output_dir) {
+  # Format the metrics_dirs array for bash
+  metrics_str <- paste(metrics_dirs, collapse=" ")
+  
+  # Generate the script content by replacing the placeholders
+  script_content <- sprintf(template, prefix, metrics_str, prefix, prefix, prefix)
+  
+  # Define the output file name
+  script_file <- file.path(output_dir, paste0(prefix, "_cepo_s_magma_geneset_benchmark.sh"))
+  
+  # Write the script to a file
+  writeLines(script_content, script_file)
+  
+  # Output message to indicate the file is written
+  cat("Generated script for:", prefix, "\n")
+}
+
+# Generate the scripts for each prefix
+for (prefix in prefix_list) {
+  generate_script(prefix, metrics_dirs, output_dir)
+}
+
+```
+
+# Step2: Generate a list of files for PC organn for sclinker_s with one side 
+```{r}
+# Define prefixes
+prefix_list <- c("HLCA_core_healthy_LP_pc",
+                 "2019_Smillie_normal_cellxgene_pc",
+                 "CARE_pc_only",
+                 "Cheng_2018_Cell_Reports_pc", 
+                 "Fasolino_2022_Nat_Metab_normal_only_pc",
+                 "FBM_Jardine_2021_Nature_pc",
+                 "human_liver_atlas_Guilliams_2022_cell_pc",
+                 "Kamath_pc_only")
+
+# Define metrics
+metrics_dirs <- c("sclinker_s")
+
+# Directory for generated scripts
+output_dir <- "~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/One_side_MG_con_scripts_improve/"
+
+# Template for bash script
+template <- "#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=%s_sclinker_s_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%%A_%%a.error
+#SBATCH --output=slurm_%%A_%%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE=\"/QRISdata/Q5729/job_list.txt\"
+trait=$(sed -n \"${i}p\" $TASKFILE)
+trait=$(echo \"$trait\" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo \"Trimmed Trait: '$trait'\"
+echo ${i}
+trait_magma_dir=\"/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc\"
+metrics_dirs=(%s) 
+for dir_name in \"${metrics_dirs[@]}\"; do
+  COVAR_FILE=\"/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/%s.${dir_name}.csv\"
+  mkdir -p /scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}
+  new_res_dir=\"/scratch/user/uqali4/geneset_res/Con_MG_set_oneside/%s/${dir_name}\"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --gene-covar $COVAR_FILE --model direction=pos --out $new_res_dir/${trait}
+done
+"
+
+# Function to generate bash script for each prefix
+generate_script <- function(prefix, metrics_dirs, output_dir) {
+  # Format the metrics_dirs array for bash
+  metrics_str <- paste(metrics_dirs, collapse=" ")
+  
+  # Generate the script content by replacing the placeholders
+  script_content <- sprintf(template, prefix, metrics_str, prefix, prefix, prefix)
+  
+  # Define the output file name
+  script_file <- file.path(output_dir, paste0(prefix, "_sclinker_s_magma_geneset_benchmark.sh"))
+  
+  # Write the script to a file
+  writeLines(script_content, script_file)
+  
+  # Output message to indicate the file is written
+  cat("Generated script for:", prefix, "\n")
+}
+
+# Generate the scripts for each prefix
+for (prefix in prefix_list) {
+  generate_script(prefix, metrics_dirs, output_dir)
+}
+
+```
+
+# Generate for TMS and TS
+
+# Step2: TMS for one side
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=tms_pc_mg
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist"
+metrics_dirs=("Cepo_s" "sclinker_s") 
+for dir_name in "${metrics_dirs[@]}"; do
+  COVAR_FILE="/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/tms_facs_1to1.${dir_name}.csv"
+  mkdir -p /scratch/user/uqali4/geneset_res/Con_MG_set_oneside/tms_pc/${dir_name}
+  new_res_dir="/scratch/user/uqali4/geneset_res/Con_MG_set_oneside/tms_pc/${dir_name}"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --gene-covar $COVAR_FILE --model direction=pos --out $new_res_dir/${trait}
+done
+
+
+```
+
+# Step2: TS for one side
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=ts_pc_mg
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist"
+metrics_dirs=("Cepo_s" "sclinker_s"") 
+for dir_name in "${metrics_dirs[@]}"; do
+  COVAR_FILE="/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/ts_pc_1to1.${dir_name}.csv"
+  mkdir -p /scratch/user/uqali4/geneset_res/Con_MG_set_oneside/ts_pc/${dir_name}
+  new_res_dir="/scratch/user/uqali4/geneset_res/Con_MG_set_oneside/ts_pc/${dir_name}"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --gene-covar $COVAR_FILE --model direction=pos --out $new_res_dir/${trait}
+done
+
+
+```
+
+# Submit all scripts
+cd /scratch/project/genetic_data_analysis/uqali4/tmp 
+rm *
+```{bash}
+#!/bin/bash
+
+# Define the directory containing the generated scripts
+script_dir="/scratch/user/uqali4/One_side_MG_con_scripts_improve"
+
+# Loop through each bash script in the directory and submit it
+cd /scratch/project/genetic_data_analysis/uqali4/tmp 
+for script in "$script_dir"/*.sh; do
+    if [[ -f "$script" ]]; then
+        echo "Submitting $script"
+        sbatch "$script"
+    else
+        echo "No bash scripts found in $script_dir"
+    fi
+done
+
+
+```
+
+
+# Collect results of Con_MG_set_oneside for Cepo_s
+```{r}
+library(tidyverse)
+library(data.table)
+
+# Define the CT directories directly (no more file prefixes)
+ct_directories <- c(
+  "2019_Smillie_normal_cellxgene",
+  "2019_Smillie_normal_cellxgene_pc",
+  "Cheng_2018_Cell_Reports_updated",
+  "Cheng_2018_Cell_Reports_pc",
+  "FBM_Jardine_2021_Nature",
+  "FBM_Jardine_2021_Nature_pc",
+  "human_liver_atlas_Guilliams_2022_cell",
+  "human_liver_atlas_Guilliams_2022_cell_pc",
+  "ts_pc",
+  "tms_pc",
+  "Fasolino_2022_Nat_Metab_normal_only",
+  "Fasolino_2022_Nat_Metab_normal_only_pc",
+  "CARE_snRNA_Heart_expr_gene_withPos",
+  "CARE_snRNA_Heart_pc",
+  "HLCA_core_healthy_LP_expr_gene_withPos",
+  "HLCA_core_healthy_LP_pc",
+  "Kamath_2022_normal_expr_gene_withPos",
+  "Kamath_2022_normal_pc"
+)
+
+# Define the metrics directories
+metrics_dirs <- c("Cepo_s")
+
+# Define traits
+traits_dt <- fread("/QRISdata/Q5729/job_list.txt", h = FALSE)
+names(traits_dt) <- "file"
+traits <- traits_dt$file
+
+# Define the base directory
+base_dir <- "/scratch/user/uqali4/geneset_res/Con_MG_set_oneside"
+
+# Initialize an empty data frame to store all results
+all <- NULL
+
+# Loop over each CT directory, metric directory, and trait
+for (ct_dir in ct_directories) {
+  for (dir_name in metrics_dirs) {
+    for (trait in traits) {
+      
+      # Construct the file path based on the CT directory, metric, and trait
+      file_path <- paste0(base_dir, "/", ct_dir, "/", dir_name, "/", trait, ".gsa.out")
+      
+      # Check if the file exists
+      if (file.exists(file_path)) {
+        # Read the file if it exists
+        df <- read.table(file_path, skip = 3, header = TRUE)
+        
+        # Check if the column 'FULL_NAME' exists, if not add it
+        if (!"FULL_NAME" %in% colnames(df)) {
+          df$FULL_NAME <- df$VARIABLE
+        }
+        
+        # Add additional columns
+        df$Dataset <- ct_dir
+        df$Trait <- trait
+        df$Metrics <- dir_name
+        df$Method <- "MAGMA set continuous one side"
+        
+        # Reorder columns as specified
+        df <- df[, c("VARIABLE", "TYPE", "NGENES", "BETA", "BETA_STD", "SE", "P",
+                     "FULL_NAME", "Dataset", "Trait", "Metrics", "Method")]
+        
+        # Combine with the 'all' dataframe
+        all <- rbind(all, df)
+      } else {
+        # Optionally print a message if the file does not exist
+        cat("File does not exist:", file_path, "\n")
+      }
+    }
+  }
+}
+
+# Select relevant columns and write to the output file
+op <- all %>% select(!c("VARIABLE", "TYPE"))
+
+# Write the result to a file
+write.table(op, "/scratch/user/uqali4/geneset_res/cepo_s_MAGMAgeneset_continuous_oneside_results.txt",
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+```
+
+
+# Collect results of Con_MG_set_oneside for sclinker_s
+```{r}
+library(tidyverse)
+library(data.table)
+
+# Define the CT directories directly (no more file prefixes)
+ct_directories <- c(
+ "2019_Smillie_normal_cellxgene",
+                 "CARE_all_genes",
+                 "Cheng_2018_Cell_Reports_updated", 
+                 "Fasolino_2022_Nat_Metab_normal_only",
+                 "HCLA_LP_allgenes",
+                 "FBM_Jardine_2021_Nature",
+                 "human_liver_atlas_Guilliams_2022_cell",
+                 "Kamath_allgenes",
+  "ts_pc",
+  "tms_pc",
+ "HLCA_core_healthy_LP_pc",
+                 "2019_Smillie_normal_cellxgene_pc",
+                 "CARE_pc_only",
+                 "Cheng_2018_Cell_Reports_pc", 
+                 "Fasolino_2022_Nat_Metab_normal_only_pc",
+                 "FBM_Jardine_2021_Nature_pc",
+                 "human_liver_atlas_Guilliams_2022_cell_pc",
+                 "Kamath_pc_only")
+
+
+# Define the metrics directories
+metrics_dirs <- c("sclinker_s")
+
+# Define traits
+traits_dt <- fread("/QRISdata/Q5729/job_list.txt", h = FALSE)
+names(traits_dt) <- "file"
+traits <- traits_dt$file
+
+# Define the base directory
+base_dir <- "/scratch/user/uqali4/geneset_res/Con_MG_set_oneside"
+
+# Initialize an empty data frame to store all results
+all <- NULL
+
+# Loop over each CT directory, metric directory, and trait
+for (ct_dir in ct_directories) {
+  for (dir_name in metrics_dirs) {
+    for (trait in traits) {
+      
+      # Construct the file path based on the CT directory, metric, and trait
+      file_path <- paste0(base_dir, "/", ct_dir, "/", dir_name, "/", trait, ".gsa.out")
+      
+      # Check if the file exists
+      if (file.exists(file_path)) {
+        # Read the file if it exists
+        df <- read.table(file_path, skip = 3, header = TRUE)
+        
+        # Check if the column 'FULL_NAME' exists, if not add it
+        if (!"FULL_NAME" %in% colnames(df)) {
+          df$FULL_NAME <- df$VARIABLE
+        }
+        
+        # Add additional columns
+        df$Dataset <- ct_dir
+        df$Trait <- trait
+        df$Metrics <- dir_name
+        df$Method <- "MAGMA set continuous one side"
+        
+        # Reorder columns as specified
+        df <- df[, c("VARIABLE", "TYPE", "NGENES", "BETA", "BETA_STD", "SE", "P",
+                     "FULL_NAME", "Dataset", "Trait", "Metrics", "Method")]
+        
+        # Combine with the 'all' dataframe
+        all <- rbind(all, df)
+      } else {
+        # Optionally print a message if the file does not exist
+        cat("File does not exist:", file_path, "\n")
+      }
+    }
+  }
+}
+
+# Select relevant columns and write to the output file
+op <- all %>% select(!c("VARIABLE", "TYPE"))
+
+# Write the result to a file
+write.table(op, "/scratch/user/uqali4/geneset_res/sclinker_s_MAGMAgeneset_continuous_oneside_results.txt",row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

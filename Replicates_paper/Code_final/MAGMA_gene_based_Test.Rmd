@@ -1,0 +1,215 @@
+1. Run for TMS_TS consistent genes
+
+# Extract only the genes we need
+/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.tms.ts.pc.txt
+```{r}
+library(data.table)
+full_dt=fread("/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.txt")
+gene_pc <- fread("/QRISdata/Q5059/data/ts/TMS_ortholog_with_TS_minCell20_pcgene_list.csv")
+# Read the pcgene list
+pcgene_list <- gene_pc$Gene
+ # Filter for genes in the pcgene list
+filtered_genes <- full_dt[V1 %in% pcgene_list]
+# Save the filtered genes to a file
+write.table(filtered_genes, 
+            file = "/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.tms.ts.pc.txt", 
+            sep = "\t", 
+            row.names = FALSE, 
+            col.names = FALSE, 
+            quote = FALSE)
+
+```
+
+
+# Step 1: Annotate genes
+window=1,0.5  
+specify the window to reach up to 1 kilobase upstream of the transcription start site, and 0.5 kilobases downstream of the transcription stop site.
+cat ${res_DIR}/step1.log
+output: step1.genes.annot
+```{bash}
+
+map_file="/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.tms.ts.pc.txt"
+res_DIR="/QRISdata/Q2120/benchmark_2014/magma_annotaiont/ukb_20k"
+bim="/scratch/project/genetic_data_analysis/uqali4/UKB_20k/ukbV3_eur_unrel_n20k_LD.bim"
+cd ${res_DIR}
+magma_version="/scratch/project/genetic_data_analysis/uqali4/software/magma"
+$magma_version --annotate window=10,10 --snp-loc ${bim} --gene-loc ${map_file} --out ${res_DIR}/Fullgene_step1tms.ts.pc
+
+
+```
+
+
+# Step 2: run magma using model: SNPwise-mean
+vi /scratch/project/genetic_data_analysis/uqali4/mg.tms.ts.pc.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=19
+#SBATCH --mem=150G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=mg.tms.ts.pc
+#SBATCH --error=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.error
+#SBATCH --output=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+annotate_file="/QRISdata/Q2120/benchmark_2014/magma_annotaiont/ukb_20k/Fullgene_step1tms.ts.pc.genes.annot"
+cd /scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist/
+magma_version="/scratch/project/genetic_data_analysis/uqali4/software/magma"
+$magma_version \
+    --bfile /scratch/project/genetic_data_analysis/uqali4/UKB_20k/ukbV3_eur_unrel_n20k_LD \
+    --pval /QRISdata/Q2120/benchmark_gwas_TL_revised/${trait} use='SNP,P' ncol='N' \
+    --gene-annot ${annotate_file} \
+    --out magma.${trait}
+
+
+
+```
+
+
+2. Run for PC genes
+
+# Extract only the genes we need
+/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.tms.ts.pc.txt
+```{r}
+
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(reshape2)
+full_dt=fread("/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.txt")
+# Read gene coordinates file and process
+gene_coordinates <- read_tsv("/scratch/project/genetic_data_analysis/uqali4/geneMatrix.56778genes.tsv",
+                             col_names = TRUE, col_types = 'cciicc') %>% filter(gene_type == "protein_coding") 
+# Read the pcgene list
+pcgene_list <- gene_coordinates$Gene
+ # Filter for genes in the pcgene list
+filtered_genes <- full_dt[V1 %in% pcgene_list]
+# Save the filtered genes to a file
+write.table(filtered_genes, 
+            file = "/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.pc.txt", 
+            sep = "\t", 
+            row.names = FALSE, 
+            col.names = FALSE, 
+            quote = FALSE)
+
+```
+
+
+
+
+# Step 1: Annotate genes
+window=1,0.5  
+specify the window to reach up to 1 kilobase upstream of the transcription start site, and 0.5 kilobases downstream of the transcription stop site.
+cat ${res_DIR}/step1.log
+output: step1.genes.annot
+```{bash}
+
+map_file="/scratch/project/genetic_data_analysis/uqali4/geneMatrix.hg19.loc.MAGMAversion.pc.txt"
+res_DIR="/QRISdata/Q2120/benchmark_2014/magma_annotaiont/ukb_20k"
+bim="/scratch/project/genetic_data_analysis/uqali4/UKB_20k/ukbV3_eur_unrel_n20k_LD.bim"
+cd ${res_DIR}
+magma_version="/scratch/project/genetic_data_analysis/uqali4/software/magma"
+$magma_version --annotate window=10,10 --snp-loc ${bim} --gene-loc ${map_file} --out ${res_DIR}/Fullgene_step1.pc
+
+
+```
+
+
+# Step 2: run magma using model: SNPwise-mean
+vi /scratch/project/genetic_data_analysis/uqali4/mg.pc.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=19
+#SBATCH --mem=150G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=mg.pc
+#SBATCH --error=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.error
+#SBATCH --output=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+annotate_file="/QRISdata/Q2120/benchmark_2014/magma_annotaiont/ukb_20k/Fullgene_step1.pc.genes.annot"
+cd /scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc/
+magma_version="/scratch/project/genetic_data_analysis/uqali4/software/magma"
+$magma_version \
+    --bfile /scratch/project/genetic_data_analysis/uqali4/UKB_20k/ukbV3_eur_unrel_n20k_LD \
+    --pval /QRISdata/Q2120/benchmark_gwas_TL_revised/${trait} use='SNP,P' ncol='N' \
+    --gene-annot ${annotate_file} \
+    --out magma.${trait}
+
+
+
+```
+
+
+
+vi /scratch/project/genetic_data_analysis/uqali4/mg.pc.gwas.min.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=19
+#SBATCH --mem=150G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=mg.pc
+#SBATCH --error=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.error
+#SBATCH --output=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-3
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/home/uqali4/GWAS_min_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+
+annotate_file="/QRISdata/Q2120/benchmark_2014/magma_annotaiont/ukb_20k/Fullgene_step1.pc.genes.annot"
+cd /scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc/
+magma_version="/scratch/project/genetic_data_analysis/uqali4/software/magma"
+$magma_version \
+    --bfile /scratch/project/genetic_data_analysis/uqali4/UKB_20k/ukbV3_eur_unrel_n20k_LD \
+    --pval /scratch/project/genetic_data_analysis/uqali4/GWAS_cojo_format/${trait} use='SNP,p' ncol='N' \
+    --gene-annot ${annotate_file} \
+    --out magma.${trait}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

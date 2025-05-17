@@ -1,0 +1,797 @@
+
+
+# Check the number of control and causal pairs.[Don't run]
+```{r}
+library(dplyr)
+library(tidyr)
+library(readxl)
+
+file_path <- "/Users/angox/Downloads/Manuscripts/Benchmark_list.xlsx"
+Trait_dt <- read_excel(file_path, sheet = "Pairs-Trait")%>%select(Phenotype,file,conldsc_file)
+head(Trait_dt)
+
+file_path <- "/Users/angox/Downloads/Manuscripts/Benchmark/Results/S_table2.xlsx"
+Trait_dt2 <- read_excel(file_path, sheet = "Cell_type_candidates")%>%select(c("Synonym","CT_scDRS","CT_cellect","CT_ldsc","Dataset","CT_fig" , "Phenotype" ,"Property")) #, "Chategory [Follow by Phenotype]"
+Trait_dt2$Dataset <- ifelse(Trait_dt2$Dataset == "TS", "Human", ifelse(Trait_dt2$Dataset == "TMS", "Mouse", Trait_dt2$Dataset))
+
+Trait_dt2 = Trait_dt2%>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))%>%filter(!(Dataset == "Human" & CT_Pheno=="type II pneumocyte_Height"))
+head(Trait_dt2)
+
+check_human_atlas_Control = Trait_dt2 %>%mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))%>%filter(Dataset == "Human", Property=="Control") #%>%filter(!CT_Pheno=="type II pneumocyte_Height")
+check_human_atlas_Causal = Trait_dt2 %>%mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))%>%filter(Dataset == "Human", Property=="Causal")
+
+check_mouse_atlas_Control = Trait_dt2 %>%mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))%>%filter(Dataset == "Mouse", Property=="Control")
+check_mouse_atlas_Causal = Trait_dt2 %>%mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))%>%filter(Dataset == "Mouse", Property=="Causal")
+
+
+
+phenotype_comparison3 <- Trait_dt2 %>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  filter(Property=="Control") %>%
+  group_by(Dataset, CT_Pheno) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Dataset, values_from = Count, values_fill = 0)
+
+# summary table
+print(phenotype_comparison3)
+
+
+# Create a summary table to compare the count of Phenotypes in "Control" and "Causal"
+phenotype_comparison <- Trait_dt2 %>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  group_by(CT_Pheno, Dataset, Property) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(phenotype_comparison)
+
+phenotype_comparison2 <- Trait_dt2 %>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  group_by(Dataset, Property) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+# Assuming your data is stored in a tibble called phenotype_comparison2
+phenotype_comparison2 <- phenotype_comparison2 %>% mutate(type = ifelse(Dataset %in% c("Human", "Mouse"), "Atlas", "Single_organ"))
+print(phenotype_comparison2) #!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+# sum up the 'Causal' and 'Control' for each 'type'
+summary_table <- phenotype_comparison2 %>%
+  group_by(type) %>%
+  summarise(
+    total_causal = sum(Causal),
+    total_control = sum(Control)
+  )
+
+print(summary_table)
+
+```
+
+# bi-LDSC atlas
+```{r}
+load("/Users/angox/Downloads/Manuscripts/Benchmark/Data_draw_fig/ts_tms_biLDSC_v1.1_final.RData") #biLDSC_atlas
+
+
+setwd("/Users/angox/Downloads/Manuscripts/Benchmark/Results/")
+tms_add2 = fread("tms_biLDSC_pcgene_different_statistics5.txt")%>%
+  rename(
+    file = Trait,
+    CT_ldsc = Cell_Type
+  ) %>% mutate(gene_group="PCgene", Dataset = "Mouse", Annotation = "Binary") %>% filter(CT_ldsc=="mucus_secreting_cell",Metrics=="cepo_norm")
+
+tms_add = fread("tms_biLDSC_pcgene_different_statistics4.txt")%>%
+  rename(
+    file = Trait,
+    CT_ldsc = Cell_Type
+  ) %>% mutate(gene_group="PCgene", Dataset = "Mouse", Annotation = "Binary")
+
+ts_add = fread("ts_biLDSC_pcgene_different_statistics4.txt")%>%
+  rename(
+    file = Trait,
+    CT_ldsc = Cell_Type
+  ) %>% mutate(gene_group="PCgene", Dataset = "Human", Annotation = "Binary")
+
+# Match cell type names
+tms_add_f2 <- inner_join(tms_add2, Trait_dt, by=c("file"))%>%select(names(biLDSC_atlas))
+tms_add_f1 <- inner_join(tms_add, Trait_dt, by=c("file"))%>%select(names(biLDSC_atlas))
+
+ts_add_f1 <- inner_join(ts_add, Trait_dt, by=c("file"))%>%select(names(biLDSC_atlas))
+
+biLDSC_add = rbind(ts_add_f1,tms_add_f1,tms_add_f2) %>% 
+  inner_join(Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property)) %>% 
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))
+
+
+
+# Define pattern replacements for metrics names
+pattern_replacements <- c(
+  "esmu" = "CELLECT-ESμ",
+  "ges.esw" = "CELLECT-GES",
+  "det.esw" = "CELLECT-DET",
+  "nsi.esw" = "CELLECT-NSI",
+  "ep.esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+biLDSC_add <- biLDSC_add %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  }))
+
+
+```
+
+# bi-LDSC single organ
+```{r}
+
+# load("/Users/angox/Downloads/Manuscripts/Benchmark/Data_draw_fig/single_organ_biLDSC.RData") # biLDSC, replicated results.
+#load("/Users/angox/Documents/Projects/Benchmark/single_organ_biLDSC.RData")
+
+load("/Users/angox/Documents/Projects/Benchmark/single_organ_biLDSC_pairs_tmp_miss2traitsincontrol.RData") #biLDSC_organ_pair
+
+biLDSC_atlas_pair_tmp = inner_join(biLDSC_atlas, 
+                                   Trait_dt2 %>% 
+                                   select(Phenotype, CT_ldsc, CT_fig, Dataset, Property)) %>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  filter(!(CT_ldsc == "mucus_secreting_cell" & Metrics == "Cepo" & Phenotype %in% c("Alzheimer's disease", "Inflammatory bowel disease")))
+
+biLDSC_atlas_pair = rbind(biLDSC_atlas_pair_tmp,biLDSC_add) %>% 
+  group_by(CT_Pheno,Metrics,Dataset) %>%               # Group by the CT_Pheno column
+  slice_min(P, with_ties = FALSE) %>%   # Keep the row with the smallest P value within each group
+  ungroup()                             # Ungroup the data
+
+
+summary1 <- biLDSC_atlas_pair  %>%
+  group_by(Dataset, Property, Metrics, gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+summary2 <- biLDSC_organ_pair %>%
+  group_by(organ, Property, Metrics, gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary2)
+
+summary3 <- biLDSC_organ_pair %>%
+  group_by(Property, Metrics, gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary3)
+
+bi_ca_lung = biLDSC_organ_pair%>%filter(organ=="Lung",Metrics=="TDEP",gene_group=="PCgene",Property=="Causal")
+bi_co_lung = biLDSC_organ_pair%>%filter(organ=="Lung",Metrics=="TDEP",gene_group=="PCgene",Property=="Control")
+
+
+
+bi_ca_mouse = biLDSC_atlas_pair%>%filter(Dataset=="Mouse",Metrics=="Cepo",Property=="Causal")
+bi_co_mouse = biLDSC_atlas_pair%>%filter(Dataset=="Mouse",Metrics=="Cepo",Property=="Control")
+setdiff(unique(bi_ca_mouse$Phenotype),unique(bi_co_mouse$Phenotype))
+
+
+bi_ca_mouse_s = biLDSC_atlas_pair%>%filter(Dataset=="Mouse",Metrics=="TDEP",Property=="Causal")
+bi_co_mouse_s=biLDSC_atlas_pair%>%filter(Dataset=="Mouse",Metrics=="TDEP",Property=="Control")
+bi_ca_human = biLDSC_atlas_pair%>%filter(Dataset=="Human",Metrics=="Cepo",Property=="Causal")
+
+```
+Organ:
+Causal:48, Control:33
+
+Atlas
+Human: Causal: 29, Control:29
+Mouse: Causal: 30, Control:30
+
+# Don't use con-LDSC check [atlas, use the code in ~/Manuscript_Ang/Benchmark_comparison/Final_figure/Fig3.Impact_of_metrics.Rmd]
+```{r}
+load("/Users/angox/Downloads/Manuscripts/Benchmark/Data_draw_fig/ts_tms_conLDSC.RData") #conLDSC_atlas_final_cleaned_unique
+conLDSC_add1 = fread("/Users/angox/Downloads/Manuscripts/Benchmark/Results/tms_ts_conLDSC_Sep19.csv")%>% 
+  dplyr::rename(CT_cellect=annotation,P=pvalue,conldsc_file=gwas)
+
+conLDSC_add1 = inner_join(conLDSC_add1,Trait_dt %>% select(Phenotype,conldsc_file)) %>% select(!c("conldsc_file"))
+conLDSC_add1$Dataset <- ifelse(conLDSC_add1$Dataset == "ts", "Human", ifelse(conLDSC_add1$Dataset == "tms", "Mouse", conLDSC_add1$Dataset))
+
+# Define pattern replacements for metrics names
+pattern_replacements <- c(
+  "esmu" = "CELLECT-ESμ",
+  "ges_esw" = "CELLECT-GES",
+  "det_esw" = "CELLECT-DET",
+  "nsi_esw" = "CELLECT-NSI",
+  "ep_esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+conLDSC_add1 <- conLDSC_add1 %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  })) %>% select(!specificity_id) %>%
+  mutate(gene_group = ifelse(Dataset %in% c("Human", "Mouse"), "PCgene", "allgene"))
+
+summary_table_check <- conLDSC_add1 %>%
+  mutate(CT_Pheno = paste(CT_cellect, Phenotype, sep = "_")) %>%
+  group_by(Dataset, Baseline,Metrics) %>%
+  summarise(Count = n(), .groups = 'drop') 
+
+summary_table_check0 <- conLDSC_atlas_final_cleaned_unique%>%
+  mutate(CT_Pheno = paste(CT_cellect, Phenotype, sep = "_")) %>%
+  group_by(Dataset, Baseline,Metrics) %>%
+  summarise(Count = n(), .groups = 'drop')  # Esmu is too much
+
+
+# = rbind(cepo_s_all_conLDSC,sclinker_s_all_conLDSC)%>%dplyr::rename(P=pvalue)  
+#conLDSC_add2$Dataset <- ifelse(conLDSC_add2$Dataset == "TS", "Human", ifelse(conLDSC_add2$Dataset == "TMS", "Mouse", conLDSC_add2$Dataset))
+
+#conLDSC_atlas_pair_2 = inner_join(conLDSC_add2%>%filter(Dataset%in%c("Mouse","Human")),Trait_dt2%>%select(Phenotype,CT_fig,Dataset,Property))%>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))
+conLDSC_atlas_pair_1 = inner_join(conLDSC_add1,Trait_dt2%>%select(Phenotype,CT_cellect,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) #%>% select(names(conLDSC_atlas_pair_2))
+
+summary_table_check1 <- conLDSC_atlas_pair_1 %>%
+  group_by(Dataset, Property,Metrics,Baseline) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+
+load("/Users/angox/Downloads/Manuscripts/Benchmark/Data_draw_fig/ts_tms_conLDSC.RData") #conLDSC_atlas_final_cleaned_unique
+conLDSC_atlas_final_cleaned_unique$Dataset <- ifelse(conLDSC_atlas_final_cleaned_unique$Dataset == "ts", "Human", ifelse(conLDSC_atlas_final_cleaned_unique$Dataset == "tms", "Mouse", conLDSC_atlas_final_cleaned_unique$Dataset))
+conLDSC_atlas_pair_3 = inner_join(conLDSC_atlas_final_cleaned_unique %>% mutate(gene_group = ifelse(Dataset %in% c("Human", "Mouse"), "PCgene", "allgene")),
+                                  Trait_dt2%>%select(Phenotype,CT_cellect,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>% select(names(conLDSC_atlas_pair_2))
+
+summary_table_check3 <- conLDSC_atlas_pair_3  %>%
+  group_by(Dataset, Property,Metrics,Baseline) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+# I found some duplication results
+conLDSC_atlas_final = rbind(conLDSC_atlas_pair_1,conLDSC_atlas_pair_2,conLDSC_atlas_pair_3) %>% 
+  distinct() %>%
+  group_by(CT_Pheno,Baseline,Metrics,Dataset,Property) %>%               # Group by the CT_Pheno column
+  slice_min(P, with_ties = FALSE) %>%   # Keep the row with the smallest P value within each group
+  ungroup()    
+
+summary_table_check4 <- conLDSC_atlas_final  %>%
+  group_by(Dataset, Property,Metrics,Baseline) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+summary_table_check4
+con_ca_mouse = conLDSC_atlas_final%>%filter(Dataset=="Mouse",Metrics=="Cepo_s",Property=="Causal",Baseline=="v1.1")%>%arrange(CT_Pheno)
+con_co_mouse = conLDSC_atlas_final%>%filter(Dataset=="Mouse",Metrics=="TDEP",Property=="Control",Baseline=="v1.1")%>%arrange(CT_Pheno)%>%distinct()
+#setdiff(unique(con_co_mouse1$Phenotype),unique(con_co_mouse$Phenotype))
+#setdiff(sort(unique(con_co_mouse1$CT_Pheno)),sort(unique(con_co_mouse$CT_Pheno)))
+
+
+con_ca_human = conLDSC_atlas_final%>%filter(Dataset=="Human",Metrics=="Cepo_s",Property=="Causal",Baseline=="v1.1")%>%arrange(CT_Pheno)
+con_co_human = conLDSC_atlas_final%>%filter(Dataset=="Human",Metrics=="Cepo_s",Property=="Control",Baseline=="v1.1")%>%arrange(CT_Pheno)
+
+con_ca_human1 = conLDSC_atlas_final%>%filter(Dataset=="Human",Metrics=="TDEP",Property=="Causal",Baseline=="v1.1")%>%arrange(CT_Pheno)
+con_co_human1 = conLDSC_atlas_final%>%filter(Dataset=="Human",Metrics=="TDEP",Property=="Control",Baseline=="v1.1")%>%arrange(CT_Pheno)
+
+setdiff(unique(con_ca_human1$Phenotype),unique(con_ca_human$Phenotype))
+setdiff(unique(con_ca_human1$CT_Pheno),unique(con_ca_human$CT_Pheno))
+
+setdiff(unique(con_co_human1$Phenotype),unique(con_co_human$Phenotype))
+setdiff(unique(con_co_human1$CT_Pheno),unique(con_co_human$CT_Pheno))
+
+setdiff(unique(check_human_atlas_Control$CT_Pheno),unique(con_co_human1$CT_Pheno))
+setdiff(unique(check_human_atlas_Causal$CT_Pheno),unique(con_ca_human1$CT_Pheno))
+#"type II pneumocyte_Hair colour" in TS is missed in control in all metrics
+#"melanocyte_Hair colour" in TS is missed in causal in all metrics
+
+
+setdiff(unique(check_mouse_atlas_Control$CT_Pheno),unique(con_co_mouse$CT_Pheno))
+
+#[1] "tracheobronchial smooth muscle cell_Alkaline phosphatase"     
+#[2] "tracheobronchial smooth muscle cell_Fasting glucose"          
+#[3] "tracheobronchial smooth muscle cell_Primary biliary cirrhosis"
+```
+
+
+
+#Don't use
+```{r}
+load("/Users/angox/Downloads/Manuscripts/Benchmark/Data_draw_fig/single_organ_conLDSC.RData") #conLDSC
+# Create the mapping as a named vector
+dataset_mapping <- c("op_Kamath_2022_normal_expr_gene" = "Kamath_2022_normal",
+                     "op_Kamath_2022_normal_pc" = "Kamath_2022_normal",
+                     "op_CARE_pc" = "CARE",
+                     "op_CARE_expr_gene_withPos" = "CARE",
+                     "op_FBM_expr_gene_withPos" = "FBM_Jardine_2021_Nature",
+                     "op_FBM_pc" = "FBM_Jardine_2021_Nature",
+                     "op_HLCA_core_healthy_LP_expr_gene_withPos" = "HLCA_core_healthy_LP",
+                     "op_HLCA_core_healthy_LP_pc" = "HLCA_core_healthy_LP")
+
+# Use mutate and recode to map the values in the Dataset column
+conLDSC <- conLDSC %>%
+  mutate(Dataset = recode(Dataset, !!!dataset_mapping))
+
+# Get the unique values of the updated Dataset column
+unique_datasets <- unique(conLDSC$Dataset)
+
+
+conLDSC <- conLDSC %>%
+  mutate(CT_cellect = case_when(
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & CT_cellect == "CD8_positive" ~ "CD8-positive",
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & CT_cellect == "CD4_positive" ~ "CD4-positive",
+    TRUE ~ CT_cellect  # Keep all other values unchanged
+  )) %>%filter(!organ=="Fetal bone marrow") %>%inner_join(Trait_dt2%>%select(CT_cellect,CT_fig)) %>%select(!CT_cellect)
+
+
+
+
+
+#sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "Kamath_pc_only"] <- "Kamath_2022_normal_pc"
+#sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "CARE_pc_only"] <- "CARE_pc"
+#conLDSC_organ_add = sclinker_s_all_conLDSC %>%filter(!Dataset%in%c("tms_facs_1to1","ts_pc_1to1"))%>%
+#  mutate(Baseline = case_when(
+#    Baseline == "baseline1.1" ~ "v1.1",
+#    Baseline == "baseline2.1" ~ "v2.1",
+#    TRUE ~ Baseline  # Keep the original value if it doesn't match the above
+#  )) %>%
+#  mutate(gene_group = ifelse(grepl("_pc$", Dataset), "PCgene", "allgene"))
+
+
+# Define the mapping for the organ column based on the study column
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Cheng_2018_Cell_Reports_pc" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "Fasolino_2022_Nat_Metab_normal_only_pc" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "2019_Smillie_normal_cellxgene_pc" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "human_liver_atlas_Guilliams_2022_cell_pc" = "Liver",
+                   "CARE_all_genes" = "Heart",
+                   "CARE_pc" = "Heart",
+                   "HCLA_LP_allgenes" = "Lung",
+                   "HCLA_LP_pc" = "Lung",                   
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "FBM_Jardine_2021_Nature_pc" = "Bone Marrow and blood",
+                   "Kamath_allgenes" = "Brain",
+                   "Kamath_2022_normal_pc" = "Brain")
+
+# Assign the organ values based on the study column
+#conLDSC_organ_add$organ <- organ_mapping[conLDSC_organ_add$Dataset]
+# Standardize the study names to match s_table2
+#conLDSC_organ_add$Dataset=gsub("_pc","",conLDSC_organ_add$Dataset)
+#conLDSC_organ_add$Dataset[conLDSC_organ_add$Dataset == "CARE_all_genes"] <- "CARE"
+#conLDSC_organ_add$Dataset[conLDSC_organ_add$Dataset == "Kamath_allgenes"] <- "Kamath_2022_normal"
+
+#conLDSC_organ_add$Dataset[conLDSC_organ_add$Dataset == "Cheng_2018_Cell_Reports"] <- "Cheng_2018_Cell_Reports_updated"
+#conLDSC_organ_add$Dataset[conLDSC_organ_add$Dataset == "HCLA_LP"] <- "HLCA_core_healthy_LP"
+#conLDSC_organ_add$Dataset[conLDSC_organ_add$Dataset == "HCLA_LP_allgenes"] <- "HLCA_core_healthy_LP"
+
+#unique(conLDSC_organ_add$Dataset)
+
+
+#conLDSC_organ_add = inner_join(conLDSC_organ_add,Trait_dt%>%select(Phenotype,conldsc_file)) %>% dplyr::rename(P=pvalue)%>% 
+#  select(!c("conldsc_file")) %>%select(names(conLDSC))
+
+
+#conLDSC_organ_add <- conLDSC_organ_add %>%
+#  mutate(CT_fig = case_when(
+#    Metrics %in% c("sclinker_s") & Dataset == "HLCA_core_healthy_LP" & CT_fig == "CD8_positive" ~ "CD8-positive",
+#    Metrics %in% c("sclinker_s") & Dataset == "HLCA_core_healthy_LP" & CT_fig == "CD4_positive" ~ "CD4-positive",
+#    TRUE ~ CT_fig  # Keep all other values unchanged
+#  )) 
+
+#conLDSC_final=rbind(conLDSC,conLDSC_organ_add)
+conLDSC_final=conLDSC
+conLDSC_organ_pair = inner_join(conLDSC_final, Trait_dt2%>%select(Phenotype,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"))%>%distinct()
+
+summary2 <- conLDSC_organ_pair %>%
+  group_by(organ, Property, Metrics, gene_group,Baseline) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary2)
+
+
+bisummary1 <- biLDSC_organ_pair %>%
+  group_by(Dataset, Property, Metrics, gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(bisummary1)
+
+summary4 <- conLDSC_organ_pair %>%
+  group_by(Dataset, Property, Metrics, gene_group, Baseline) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary4)
+
+summary3 <- conLDSC_organ_pair %>%
+  group_by(Property, Metrics, gene_group,Baseline) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary3)
+
+
+#Dataset=="HLCA_core_healthy_LP",
+con_ca1 = conLDSC_organ_pair%>%filter(Metrics=="sclinker_s",Property=="Causal",Baseline=="v1.1",gene_group=="PCgene")
+con_ca2 = conLDSC_organ_pair%>%filter(Metrics=="sclinker",Property=="Causal",Baseline=="v1.1",gene_group=="PCgene")
+
+setdiff(unique(con_ca2$Phenotype),unique(con_ca1$Phenotype))
+setdiff(unique(con_ca2$CT_Pheno),unique(con_ca1$CT_Pheno))
+
+
+```
+Organ:
+Causal:48, Control:33
+
+
+# LDSC atlas baseline binary vs. continuous with 27 common pairs in human and mouse
+```{r}
+LDSC_atlas = rbind(biLDSC_atlas_pair %>% select(P,Annotation,CT_fig,Phenotype,Property,Metrics,Dataset),
+                   conLDSC_atlas_pair %>% mutate(Annotation="Continuous") %>% filter(Baseline=="v1.1") %>% select(P,Annotation,CT_fig,Phenotype,Property,Metrics,Dataset))
+
+filtered_data_human <- LDSC_atlas %>%filter(Dataset=="Human") %>% filter(P < 0.05)  
+summary <- LDSC_atlas %>%
+  group_by(Dataset,Property,Metrics,Annotation) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary)
+
+Main_01 = ggplot(filtered_data_human%>%filter(!Property=="Resultant"), aes(x = Metrics, fill=factor(Annotation))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~Dataset)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts",
+    fill = "Annotation"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set2") +
+   geom_hline(yintercept = 29*0.05, linetype="dotted",color = "red", size=0.5)
+Main_01
+
+
+
+# Group by CT_Pheno and check for the presence of both "Human" and "Mouse"
+
+LDSC_atlas_common <- LDSC_atlas %>% 
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  group_by(CT_Pheno) %>%
+  filter(all(c("Human", "Mouse") %in% Dataset)) %>%
+  ungroup()
+
+summary <- LDSC_atlas_common %>%
+  group_by(Dataset,Property,Metrics,Annotation) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary)
+
+# Filter data based on P < 0.05
+filtered_data <- LDSC_atlas_common %>% filter(P < 0.05)  
+#%>%filter(Dataset=="Human")
+Main_02 = ggplot(LDSC_atlas_common%>%filter(!Property=="Resultant")%>%filter(Annotation=="Continuous")%>%filter(!Metrics%in%c("CELLECT-DET_s", "CELLECT-EP_s","CELLECT-GES_s","CELLECT-NSI_s")), aes(x = Metrics,y=-log10(P), fill=factor(Dataset))) +
+  geom_violin() +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black", position = position_dodge(width = 0.9)) +
+  facet_grid(Property~.)+
+  labs(
+    title = "",
+    x = "Method",
+    y = "Counts",
+    fill = "Dataset"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Paired") +
+   geom_hline(yintercept = 27*0.05, linetype="dotted",color = "red", size=0.5)
+
+
+Main_02
+
+
+```
+
+
+# LDSC organ baseline binary vs. continuous, gene_group & organ
+```{r}
+LDSC_organ = rbind(biLDSC_organ_pair %>% mutate(Annotation="Binary")%>% select(P,Annotation,CT_fig,Phenotype,Property,Metrics,organ,gene_group),
+                   conLDSC_organ_pair %>% mutate(Annotation="Continuous") %>% filter(Baseline=="v1.1") %>% select(P,Annotation,CT_fig,Phenotype,Property,Metrics,organ,gene_group))
+
+
+
+summary1 <- biLDSC_organ_pair %>%
+  group_by(Property,Metrics,gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+
+summary2 <- conLDSC_organ_pair %>%
+  group_by(Property,Metrics,gene_group,Baseline) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary2)
+
+# Filter data based on P < 0.05
+filtered_data_organ <- LDSC_organ %>% filter(P < 0.05)  
+#%>%filter(Dataset=="Human")
+
+Main_01 = ggplot(filtered_data_organ%>%filter(!Property=="Resultant"), aes(x = Metrics, fill=factor(Annotation))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~gene_group)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set1") +
+   geom_hline(yintercept = 33*0.05, linetype="dotted",color = "red", size=0.5)+
+   geom_hline(yintercept = 48, linetype="dotted",color = "red", size=0.5)
+Main_01
+#%>%filter(!Metrics%in%c("CELLECT-DET_s", "CELLECT-EP_s","CELLECT-GES_s","CELLECT-NSI_s")) #, fill=factor(organ)
+Main_02=ggplot(conLDSC_organ_pair%>%filter(!Property=="Resultant"), aes(x = Metrics,y=-log10(P), fill=factor(Metrics))) +
+  geom_violin() +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black", position = position_dodge(width = 0.9)) +
+  facet_grid(Property~gene_group)+
+  labs(
+    title = "",
+    x = "Method",
+    y = "-log10(P-value)",
+    fill = "Dataset"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Paired") +
+   geom_hline(yintercept = 27*0.05, linetype="dotted",color = "red", size=0.5)
+Main_02
+
+Main_03=ggplot(LDSC_organ%>%filter(!Property=="Resultant"), aes(x = Metrics,y=-log10(P), fill=factor(Annotation))) +
+  geom_violin() +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black", position = position_dodge(width = 0.9)) +
+  facet_grid(Property~gene_group)+
+  labs(
+    title = "",
+    x = "Method",
+    y = "-log10(P-value)",
+    fill = ""
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid"),
+    legend.position = "top") +
+  xlab("") +
+  scale_fill_brewer(palette = "Set1") +
+   geom_hline(yintercept = 27*0.05, linetype="dotted",color = "red", size=0.5)
+Main_03
+
+# LDSC.metrics.gene.group.pdf
+ggplot(conLDSC_organ_pair%>%filter(!Property=="Resultant")%>%filter(!Metrics%in%c("CELLECT-DET_s", "CELLECT-EP_s","CELLECT-GES_s","CELLECT-NSI_s")), aes(x = Metrics,y=-log10(P), fill=factor(Metrics))) +
+  geom_violin() +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black", position = position_dodge(width = 0.9)) +
+  facet_grid(Property~.)+
+  labs(
+    title = "",
+    x = "Method",
+    y = "Counts",
+    fill = "Dataset"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Paired") +
+   geom_hline(yintercept = 27*0.05, linetype="dotted",color = "red", size=0.5)
+```
+
+
+# Baseline v1.1 vs. 2.1 under continuous
+```{r}
+# Filter data based on P < 0.05
+filtered_data_conLDSC_organ <- conLDSC_organ_pair %>% filter(P < 0.05)  
+Main_03 = ggplot(filtered_data_conLDSC_organ%>%filter(!Property=="Resultant"), aes(x = Metrics, fill=factor(Baseline))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~gene_group)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts",
+    fill = "Baseline"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Oranges") +
+   geom_hline(yintercept = 33*0.05, linetype="dotted",color = "red", size=0.5)
+Main_03
+
+```
+
+
+
+
+
+
+For the same cell type from different data sets.
+
+```{r}
+
+f1=LDSC_atlas %>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"),organ="Atlas")%>%filter(Metrics=="Cepo",Dataset=="Human",Annotation=="Continuous")%>%
+  select(P, CT_fig, Phenotype, Property, `Chategory [Follow by Phenotype]`, organ, CT_Pheno)
+
+f2=biLDSC_organ_pair %>% 
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"),Annotation="Continuous") %>% filter(Metrics=="Cepo",gene_group=="PCgene")%>%
+  select(P, CT_fig, Phenotype, Property, `Chategory [Follow by Phenotype]`, organ, CT_Pheno)
+vv=rbind(f1,f2)
+
+# Keep only rows where CT_Pheno appears in both datasets
+conLDSC_common <- vv %>%
+  semi_join(f1, by = "CT_Pheno") %>%
+  semi_join(f2, by = "CT_Pheno")%>%filter(!Property=="Resultant")
+
+
+
+f1=LDSC_atlas %>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"),organ="Atlas")%>%filter(Metrics=="Cepo",Dataset=="Human",Annotation=="Binary")%>%
+  select(P, CT_fig, Phenotype, Property, `Chategory [Follow by Phenotype]`, organ, CT_Pheno)
+
+f2=biLDSC_organ_pair %>% 
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"),Annotation="Binary") %>% filter(Metrics=="Cepo",gene_group=="PCgene")%>%
+  select(P, CT_fig, Phenotype, Property, `Chategory [Follow by Phenotype]`, organ, CT_Pheno)
+vv=rbind(f1,f2)
+
+# Keep only rows where CT_Pheno appears in both datasets
+biLDSC_common <- vv %>%
+  semi_join(f1, by = "CT_Pheno") %>%
+  semi_join(f2, by = "CT_Pheno")%>%filter(!Property=="Resultant")
+
+method_common = rbind(scDRS_common%>%dplyr::rename(P=assoc_mcp)%>%select(names(biLDSC_common))%>%mutate(Method="scDRS-mBAT-combo"),biLDSC_common%>%mutate(Method="Cepo-biLDSC"),conLDSC_common%>%mutate(Method="Cepo-conLDSC"))
+
+
+summary1 <- method_common %>%
+  group_by(Property,Method,organ) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+
+ggplot(method_common, aes(x = CT_Pheno, y = -log10(P), color = organ, shape = Method)) +  
+  geom_point(size = 3, alpha = 0.7) +  # Add points to represent P values with different shapes for Method
+  facet_grid(Method~ Property, scales = "free") +  # Facet by Property
+  labs(
+    title = "",
+    x = "CT_Pheno",
+    y = "-log10(P-value)",
+    color = "Organ",
+    shape = "Method"
+  ) +  
+  theme_minimal() +  # Apply minimal theme for clarity
+  theme(
+    panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid"),
+    text = element_text(size = 12),  # Adjust text size for readability
+    strip.text = element_text(color = "black", size = 12, face = "bold"),  # Customize facet labels
+    axis.text.x = element_text(color = "black", face = "bold", angle = 90, hjust = 1)  # Rotate x-axis labels for better visibility
+  ) +  
+  scale_color_brewer(palette = "Set1") +  # Use a color palette for the organs
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5) #+  
+ # ylim(0, 4)
+
+method_common_h2=inner_join(fm_dt,method_common)
+
+
+plot_h2 <- ggplot(method_common_h2, aes(x = hsq, y = -log10(P), color = Method)) +
+  geom_point(size = 3, alpha = 0.7) +
+  facet_grid(Method~ Property, scales = "free")+  # Add points to represent P values
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey") +  
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 1) +
+  labs(
+    title = "Correlation between h2 and P-value",
+    x = "h2",
+    y = "-log10(P)"
+  ) +
+  theme_minimal() +
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)+  # Apply minimal theme for clarity
+  theme(
+    panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid"),
+    text = element_text(size = 12),  # Adjust text size for readability
+    strip.text = element_text(color = "black", size = 12, face = "bold"),  # Customize facet labels
+    axis.text.x = element_text(color = "black", face = "bold", angle = 90, hjust = 1)  # Rotate x-axis labels for better visibility
+  ) 
+
+ggplot(ff, aes(x = hsq, y = -log10(P), color = Method)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 1) +
+  labs(
+    title = "Correlation between hsq and P-value",
+    x = "hsq",
+    y = "-log10(P)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom"
+  )+
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)
+
+
+plot_snp <- ggplot(method_common_h2, aes(x = log10(IndependentSignals), y = -log10(P), color = Method)) +
+  geom_point(size = 3, alpha = 0.7) +
+  facet_grid(Method~ Property, scales = "free")+ 
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey") +  
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 1) +
+  labs(
+    title = "Correlation between IndependentSignals and P-value",
+    x = "log10 IndependentSignals",
+    y = "-log10(P)"
+  ) +
+  theme_minimal() +
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)+  # Apply minimal theme for clarity
+  theme(
+    panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid"),
+    text = element_text(size = 12),  # Adjust text size for readability
+    strip.text = element_text(color = "black", size = 12, face = "bold"),  # Customize facet labels
+    axis.text.x = element_text(color = "black", face = "bold", angle = 90, hjust = 1)  # Rotate x-axis labels for better visibility
+  ) 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

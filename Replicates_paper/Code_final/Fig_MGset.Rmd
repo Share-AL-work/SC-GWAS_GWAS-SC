@@ -1,0 +1,683 @@
+By default, the testing direction is set to one-sided, positive for gene sets [Binary] and to two-sided for gene properties [Continuous].
+
+# MGset-com from cepo_s and sclinker_s
+# add_MG_atlas, add_MG_organ  [Not use]
+```{r}
+cepo_s_MG = fread("~/Manuscript_Ang/Benchmark_comparison/cepo_s_MAGMAgeneset_continuous_oneside_results.txt")
+
+sclinker_s_MG = fread("~/Manuscript_Ang/Benchmark_comparison/sclinker_s_MAGMAgeneset_continuous_oneside_results.txt")
+sclinker_s_MG$Dataset[sclinker_s_MG$Dataset == "CARE_pc_only"] <- "CARE_snRNA_Heart_pc"
+sclinker_s_MG$Dataset[sclinker_s_MG$Dataset == "CARE_all_genes"] <- "CARE_snRNA_Heart_expr_gene_withPos"
+sclinker_s_MG$Dataset[sclinker_s_MG$Dataset == "Kamath_pc_only"] <- "Kamath_2022_normal_pc"
+sclinker_s_MG$Dataset[sclinker_s_MG$Dataset == "Kamath_allgenes"] <- "Kamath_2022_normal_expr_gene_withPos"
+sclinker_s_MG$Dataset[sclinker_s_MG$Dataset == "HCLA_LP_allgenes"] <- "HLCA_core_healthy_LP_expr_gene_withPos"
+
+# For cepo_s_MG
+cepo_s_MG <- cepo_s_MG %>%
+  mutate(
+    gene_group = ifelse(grepl("_pc$", Dataset), "PCgene", "allgene"),
+    Dataset = gsub("_expr_gene", "", Dataset),
+    Dataset = gsub("_pc", "", Dataset),
+    Dataset = gsub("_withPos", "", Dataset)
+  )
+
+cepo_s_MG$Dataset[cepo_s_MG$Dataset == "Cheng_2018_Cell_Reports"] <- "Cheng_2018_Cell_Reports_updated"
+cepo_s_MG$Dataset[cepo_s_MG$Dataset == "CARE_snRNA_Heart"] <- "CARE"
+
+cepo_s_MG_tmp <- inner_join(
+  cepo_s_MG %>% dplyr::rename(file = Trait),
+  Trait_dt %>% select(Phenotype, file)
+) %>% select(!c("file"))
+
+# For sclinker_s_MG
+sclinker_s_MG <- sclinker_s_MG %>%
+  mutate(
+    gene_group = ifelse(grepl("_pc$", Dataset), "PCgene", "allgene"),
+    Dataset = gsub("_expr_gene", "", Dataset),
+    Dataset = gsub("_pc", "", Dataset),
+    Dataset = gsub("_withPos", "", Dataset)
+  )
+
+sclinker_s_MG$Dataset[sclinker_s_MG$Dataset == "Cheng_2018_Cell_Reports"] <- "Cheng_2018_Cell_Reports_updated"
+sclinker_s_MG$Dataset[sclinker_s_MG$Dataset == "CARE_snRNA_Heart"] <- "CARE"
+
+sclinker_s_MG_tmp <- inner_join(
+  sclinker_s_MG %>% dplyr::rename(file = Trait),
+  Trait_dt %>% select(Phenotype, file)
+) %>% select(!c("file"))
+
+
+add_MG = rbind(sclinker_s_MG_tmp,cepo_s_MG_tmp)
+add_MG$Dataset[add_MG$Dataset == "ts"] <- "Human"
+add_MG$Dataset[add_MG$Dataset == "tms"] <- "Mouse"
+
+add_MG <- add_MG %>%
+  mutate(FULL_NAME = case_when(
+   Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD8_positive__alpha_beta_T_cell" ~ "CD8.positive__alpha.beta_T_cell",
+   Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD4_positive__alpha_beta_T_cell" ~ "CD4.positive__alpha.beta_T_cell",
+    TRUE ~ FULL_NAME  # Keep all other values unchanged
+  )) %>% dplyr::rename(CT_ldsc="FULL_NAME")
+
+add_MG = inner_join(add_MG, Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property,`Chategory [Follow by Phenotype]`)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"), Annotation="Continuous-one-side")
+
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung",
+                   "Mouse" = "Atlas - Mouse",
+                   "Human" = "Atlas - Human")
+
+# Assign the organ values based on the study column
+add_MG$organ <- organ_mapping[add_MG$Dataset]
+
+add_MG_atlas = add_MG%>%filter(Dataset%in%c("Human","Mouse"))
+add_MG_organ = add_MG%>%filter(!Dataset%in%c("Human","Mouse"))
+
+
+
+cepo_s_MG_tms=cepo_s_MG%>%filter(Dataset=="ts_pc")  #107 CT in tms; 157 CT in ts.
+sclinker_s_MG_tms=sclinker_s_MG%>%filter(Dataset=="ts_pc") #36 CT in tms; 40 CT in ts.
+sort(unique(sclinker_s_MG_tms$FULL_NAME))
+sort(unique(cepo_s_MG_tms$FULL_NAME))
+
+
+cepo_s_MG_smille=cepo_s_MG%>%filter(Dataset=="FBM_Jardine_2021_Nature")
+sclinker_s_MG_smille=sclinker_s_MG%>%filter(Dataset=="FBM_Jardine_2021_Nature")
+
+sort(unique(sclinker_s_MG_smille$FULL_NAME))
+sort(unique(cepo_s_MG_smille$FULL_NAME))
+
+
+summary1 <- cepo_s_MG  %>%
+  group_by(Dataset, Metrics,gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') 
+
+summary2 <- sclinker_s_MG  %>%
+  group_by(Dataset, Metrics,gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') 
+summary1
+summary2
+```
+
+# MGset-con organ two-side [Not use]
+```{r}
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(readxl)
+
+conMGset_organ_df=fread("/Users/angox/Downloads/Manuscripts/Benchmark/All_organ_8metrics_MAGMAgeneset_continuous_twoside_results.txt")
+
+conMGset_organ_df <- conMGset_organ_df %>% mutate(gene_group = ifelse(grepl("_pc$", Dataset), "PCgene", "allgene"))
+conMGset_organ_df$Dataset=gsub("_expr_gene","",conMGset_organ_df$Dataset)
+conMGset_organ_df$Dataset=gsub("_pc","",conMGset_organ_df$Dataset)
+conMGset_organ_df$Dataset=gsub("_withPos","",conMGset_organ_df$Dataset)
+conMGset_organ_df$Dataset[conMGset_organ_df$Dataset == "Cheng_2018_Cell_Reports"] <- "Cheng_2018_Cell_Reports_updated"
+
+conMGset_organ_df_tmp = inner_join(conMGset_organ_df%>%dplyr::rename(file=Trait),Trait_dt%>%select(Phenotype,file)) %>% select(!c("file")) # 38 traits
+
+pattern_replacements <- c(
+   "esmu" = "CELLECT-ESμ",
+  "ges_esw" = "CELLECT-GES",
+  "det_esw" = "CELLECT-DET",
+  "nsi_esw" = "CELLECT-NSI",
+  "ep_esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+conMGset_organ_df_tmp <- conMGset_organ_df_tmp %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  })) 
+
+
+
+conMG_organ_two <- conMGset_organ_df_tmp %>%
+  mutate(FULL_NAME = case_when(
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD8_positive__alpha_beta_T_cell" ~ "CD8.positive__alpha.beta_T_cell",
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD4_positive__alpha_beta_T_cell" ~ "CD4.positive__alpha.beta_T_cell",
+    TRUE ~ FULL_NAME  # Keep all other values unchanged
+  ))%>%
+  mutate(FULL_NAME = case_when(
+   Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD8-positive__alpha-beta_T_cell" ~ "CD8.positive__alpha.beta_T_cell",
+   Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD4-positive__alpha-beta_T_cell" ~ "CD4.positive__alpha.beta_T_cell",
+    TRUE ~ FULL_NAME  # Keep all other values unchanged
+  )) %>% dplyr::rename(CT_ldsc="FULL_NAME")
+
+
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung")
+
+# Assign the organ values based on the study column
+conMG_organ_two$organ <- organ_mapping[conMG_organ_two$Dataset]
+
+
+
+conMG_organ_two = inner_join(conMG_organ_two, Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"), Annotation="Continuous-two-side")
+
+
+summary1 <- conMG_organ_two  %>%
+  group_by(Dataset, Property, Metrics,gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+
+summary2 <- conMG_organ_two  %>%
+  group_by(Property, Metrics,gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary2)
+
+```
+
+# MGset-con organ one side
+```{r}
+
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(readxl)
+
+conMGset_organ_df=fread("/Users/angox/Downloads/Manuscripts/Benchmark/All_organ_8metrics_MAGMAgeneset_continuous_oneside_results.txt")
+
+conMGset_organ_df <- conMGset_organ_df %>% mutate(gene_group = ifelse(grepl("_pc$", Dataset), "PCgene", "allgene"))
+conMGset_organ_df$Dataset=gsub("_expr_gene","",conMGset_organ_df$Dataset)
+conMGset_organ_df$Dataset=gsub("_pc","",conMGset_organ_df$Dataset)
+conMGset_organ_df$Dataset=gsub("_withPos","",conMGset_organ_df$Dataset)
+conMGset_organ_df$Dataset[conMGset_organ_df$Dataset == "Cheng_2018_Cell_Reports"] <- "Cheng_2018_Cell_Reports_updated"
+
+conMGset_organ_df_tmp = inner_join(conMGset_organ_df%>%dplyr::rename(file=Trait),Trait_dt%>%select(Phenotype,file)) %>% select(!c("file")) # 38 traits
+
+pattern_replacements <- c(
+   "esmu" = "CELLECT-ESμ",
+  "ges_esw" = "CELLECT-GES",
+  "det_esw" = "CELLECT-DET",
+  "nsi_esw" = "CELLECT-NSI",
+  "ep_esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+conMGset_organ_df_tmp <- conMGset_organ_df_tmp %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  })) 
+
+
+
+conMG_organ <- conMGset_organ_df_tmp %>%
+  mutate(FULL_NAME = case_when(
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD8_positive__alpha_beta_T_cell" ~ "CD8.positive__alpha.beta_T_cell",
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD4_positive__alpha_beta_T_cell" ~ "CD4.positive__alpha.beta_T_cell",
+    TRUE ~ FULL_NAME  # Keep all other values unchanged
+  ))%>%
+  mutate(FULL_NAME = case_when(
+   Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD8-positive__alpha-beta_T_cell" ~ "CD8.positive__alpha.beta_T_cell",
+   Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD4-positive__alpha-beta_T_cell" ~ "CD4.positive__alpha.beta_T_cell",
+    TRUE ~ FULL_NAME  # Keep all other values unchanged
+  )) %>% dplyr::rename(CT_ldsc="FULL_NAME")
+
+
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung")
+
+# Assign the organ values based on the study column
+conMG_organ$organ <- organ_mapping[conMG_organ$Dataset]
+
+conMG_organ = inner_join(conMG_organ, Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"), Annotation="Continuous-one-side")
+
+summary1 <- conMG_organ  %>%
+  group_by(Dataset, Property, Metrics,gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+
+summary2 <- conMG_organ  %>%
+  group_by(Property, Metrics,gene_group) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary2)
+
+
+```
+
+
+# MGset-bi organ all genes
+```{r}
+
+library(data.table)
+library(dplyr)
+library(readxl)
+
+MGset_organ_df=fread("/Users/angox/Downloads/Manuscripts/Benchmark/All_organ_CT_allgenes_8metrics_MAGMAgeneset_results.txt")
+
+# Standardize the study names to match s_table2
+MGset_organ_df$Dataset=gsub("ctd_","",MGset_organ_df$Dataset)
+MGset_organ_df$Dataset=gsub("_expr_gene","",MGset_organ_df$Dataset)
+MGset_organ_df$Dataset=gsub("_allgenes","",MGset_organ_df$Dataset)
+MGset_organ_df$Dataset[MGset_organ_df$Dataset == "HLCA_core_healthy"] <- "HLCA_core_healthy_LP"
+
+MGset_organ_df_tmp = inner_join(MGset_organ_df%>%dplyr::rename(file=Trait),Trait_dt%>%select(Phenotype,file)) %>% select(!c("file")) # 38 traits
+
+pattern_replacements <- c(
+  "esmu" = "CELLECT-ESμ",
+  "ges.esw" = "CELLECT-GES",
+  "det.esw" = "CELLECT-DET",
+  "nsi.esw" = "CELLECT-NSI",
+  "ep.esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+MGset_organ_df_tmp <- MGset_organ_df_tmp %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  })) 
+
+
+MG_organ_set_allgenes <- MGset_organ_df_tmp %>%
+  mutate(FULL_NAME = case_when(
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD8_positive__alpha_beta_T_cell" ~ "CD8.positive__alpha.beta_T_cell",
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD4_positive__alpha_beta_T_cell" ~ "CD4.positive__alpha.beta_T_cell",
+    TRUE ~ FULL_NAME  # Keep all other values unchanged
+  ))%>%dplyr::rename(CT_ldsc="FULL_NAME")
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung")
+
+# Assign the organ values based on the study column
+MG_organ_set_allgenes$organ <- organ_mapping[MG_organ_set_allgenes$Dataset]
+
+
+MGset_organ_allgenes = inner_join(MG_organ_set_allgenes, Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"), Annotation="Binary-one-side") 
+
+MGset_organ_allgenes$Method[MGset_organ_allgenes$Dataset == "MAGMA gene-set"] <- "MAGMA set binary one side"
+
+summary1 <- MGset_organ_allgenes  %>%
+  group_by(Dataset, Property, Metrics) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+
+summary2 <- MGset_organ_allgenes  %>%
+  group_by(Property, Metrics) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary2)
+
+
+```
+
+
+# MGset organ PC
+```{r}
+MGset_organ_df=fread("/Users/angox/Downloads/Manuscripts/Benchmark/All_organ_CT_PC_8metrics_MAGMAgeneset_results.txt")
+
+# Standardize the study names to match s_table2
+MGset_organ_df$Dataset=gsub("_pc","",MGset_organ_df$Dataset)
+MGset_organ_df$Dataset=gsub("ctd_","",MGset_organ_df$Dataset)
+
+MGset_organ_df$Dataset[MGset_organ_df$Dataset == "HLCA_core_healthy"] <- "HLCA_core_healthy_LP"
+MGset_organ_df$Dataset[MGset_organ_df$Dataset == "Cheng_2018_Cell_Reports"] <- "Cheng_2018_Cell_Reports_updated"
+
+MGset_organ_df_tmp = inner_join(MGset_organ_df%>%dplyr::rename(file=Trait),Trait_dt%>%select(Phenotype,file)) %>% select(!c("file")) # 38 traits
+
+pattern_replacements <- c(
+  "esmu" = "CELLECT-ESμ",
+  "ges.esw" = "CELLECT-GES",
+  "det.esw" = "CELLECT-DET",
+  "nsi.esw" = "CELLECT-NSI",
+  "ep.esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+
+# Apply the replacements to metrics names
+MGset_organ_df_tmp <- MGset_organ_df_tmp %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  })) 
+
+
+MG_organ_set_PCgenes <- MGset_organ_df_tmp %>%
+  mutate(FULL_NAME = case_when(
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD8_positive__alpha_beta_T_cell" ~ "CD8.positive__alpha.beta_T_cell",
+    Metrics %in% c("Cepo", "sclinker") & Dataset == "HLCA_core_healthy_LP" & FULL_NAME == "CD4_positive__alpha_beta_T_cell" ~ "CD4.positive__alpha.beta_T_cell",
+    TRUE ~ FULL_NAME  # Keep all other values unchanged
+  ))%>%dplyr::rename(CT_ldsc="FULL_NAME")
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung")
+
+# Assign the organ values based on the study column
+MG_organ_set_PCgenes$organ <- organ_mapping[MG_organ_set_PCgenes$Dataset]
+
+
+MGset_organ_pc = inner_join(MG_organ_set_PCgenes, Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"), Annotation="Binary-one-side") 
+
+MGset_organ_pc$Method[MGset_organ_pc$Dataset == "MAGMA gene-set"] <- "MAGMA set binary one side"
+
+
+summary1 <- MGset_organ_pc  %>%
+  group_by(Dataset, Property, Metrics) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+
+summary2 <- MGset_organ_pc  %>%
+  group_by(Property, Metrics) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary2)
+
+
+```
+
+
+# con-MGset atlas
+```{r}
+conMGset_atlas_df=fread("/Users/angox/Downloads/Manuscripts/Benchmark/Atlas_PC_8metrics_MAGMAgeneset_continuous_oneside_results.txt")
+conMGset_atlas_df$Dataset <- ifelse(conMGset_atlas_df$Dataset == "ts_pc", "Human", ifelse(conMGset_atlas_df$Dataset == "tms_pc", "Mouse", conMGset_atlas_df$Dataset))
+conMGset_atlas_df_tmp = inner_join(conMGset_atlas_df%>%dplyr::rename(file=Trait),Trait_dt%>%select(Phenotype,file)) %>% select(!c("file")) # 38 traits
+pattern_replacements <- c(
+  "esmu" = "CELLECT-ESμ",
+  "ges.esw" = "CELLECT-GES",
+  "det.esw" = "CELLECT-DET",
+  "nsi.esw" = "CELLECT-NSI",
+  "ep.esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+conMGset_atlas_df_tmp <- conMGset_atlas_df_tmp %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  })) 
+
+Trait_dt2$Dataset[Trait_dt2$Dataset == "TS"] <- "Human"
+conMGset_atlas = inner_join(conMGset_atlas_df_tmp%>%dplyr::rename(CT_ldsc="FULL_NAME"), Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property)) %>% 
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"), Annotation="Continuous-one-side")
+
+
+organ_mapping <- c("Mouse" = "Atlas - Mouse",
+                   "Human" = "Atlas - Human")
+
+
+
+conMGset_atlas$Metrics[conMGset_atlas$Metrics == "TDEP"] <- "EP"
+summary1 <- conMGset_atlas  %>%
+  group_by(Dataset, Property, Metrics) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+```
+
+
+# bi-MGset atlas
+```{r}
+MGset_atlas_df=fread("/Users/angox/Downloads/Manuscripts/Benchmark/TMS_TS_PC_allCT_8metrics_MAGMAgeneset.txt")
+MGset_atlas_df$Dataset <- ifelse(MGset_atlas_df$Dataset == "ts_pc", "Human", ifelse(MGset_atlas_df$Dataset == "tms_pc", "Mouse", MGset_atlas_df$Dataset))
+MGset_atlas_df_tmp = inner_join(MGset_atlas_df%>%dplyr::rename(file=Trait),Trait_dt%>%select(Phenotype,file)) %>% select(!c("file")) # 38 traits
+pattern_replacements <- c(
+  "esmu" = "CELLECT-ESμ",
+  "ges.esw" = "CELLECT-GES",
+  "det.esw" = "CELLECT-DET",
+  "nsi.esw" = "CELLECT-NSI",
+  "ep.esw" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+MGset_atlas_df_tmp <- MGset_atlas_df_tmp %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  })) 
+
+
+biMGset_atlas = inner_join(MGset_atlas_df_tmp%>%dplyr::rename(CT_ldsc="FULL_NAME"), Trait_dt2%>%select(Phenotype,CT_ldsc,CT_fig,Dataset,Property)) %>% mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_"), Annotation="Binary-one-side") %>%select(!c("gene_group"))
+biMGset_atlas$Method[biMGset_atlas$Dataset == "MAGMA gene-set"] <- "MAGMA set binary one side"
+
+summary1 <- biMGset_atlas  %>%
+  group_by(Dataset, Property, Metrics) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary1)
+
+```
+sclinker-human: causal 少1:
+cat /scratch/user/uqali4/geneset_res/PCgenes_background/ts_pc/det.esw_s/MAGMA_100kb_based/ADHD_meta_Jan2022_iPSYCH1_iPSYCH2_deCODE_PGC.meta_tidy.ma.log
+WARNING: analysis failed for 'erythrocyte' (set); could not invert variable design matrix: variable is collinear with conditioned covariates
+sclinker-mouse: causal 少3
+
+
+# Compare Metrics in organ:
+# Conclusion: Use PC genes
+```{r}
+library(ggplot2)
+
+biMGset_organ=rbind(MGset_organ_pc,MGset_organ_allgenes)
+MGset_organ=rbind(rbind(biMGset_organ,conMG_organ,conMG_organ_two))
+
+save(MGset_organ, file = "/Users/angox/Documents/Projects/Benchmark/single_organ_MGset_pairs_tmp_missHaircolor.RData")
+
+# Filter data based on P < 0.05
+filtered_data <- MGset_organ %>% filter(P < 0.05)  
+
+Main_01 = ggplot(filtered_data%>%filter(!Property=="Resultant"), aes(x = Metrics, fill=factor(Annotation))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~gene_group)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set1") +
+   geom_hline(yintercept = 34*0.05, linetype="dotted",color = "red", size=0.5)+
+   geom_hline(yintercept = 48, linetype="dotted",color = "red", size=0.5)
+Main_01
+
+Main_04 <- ggplot(
+  MGset_organ %>% filter(!Property == "Resultant"),
+  aes(x = Metrics, y = -log10(P), fill = factor(Annotation))
+) +
+  geom_violin() +
+  stat_summary(
+    fun = mean, geom = "point", shape = 20, size = 3, color = "black",
+    position = position_dodge(width = 0.9)
+  ) +
+  facet_grid(Property ~ gene_group) + #, scales = "free_y"
+  labs(
+    x = "",
+    y = "-log10-P",
+    fill = NULL  # Remove legend title for fill aesthetic
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45, hjust = 1, color = "black", size = 12, face = "bold"
+    ),
+    text = element_text(size = 12),
+    axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+    strip.text = element_text(color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(
+      fill = NA, color = "black", size = 1, linetype = "solid"
+    ),
+    legend.position = "top"
+  ) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set1") +
+  geom_hline(
+    yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5
+  )
+
+Main_04
+# MG.metrics.gene.group.pdf
+
+```
+
+# No use!!!
+```{r}
+LDSC_organ$Method="con-LDSC"
+organ_res_LD=rbind(LDSC_organ,MGset_organ%>%mutate(Annotation="Continuous")%>%select(names(LDSC_organ)))
+
+filtered_data <- organ_res_LD %>% filter(P < 0.05)  
+
+Main_0122 = ggplot(filtered_data%>%filter(!Property=="Resultant")%>%filter(Annotation=="Continuous"), aes(x = Metrics, fill=factor(Method))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~gene_group)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set1") +
+   geom_hline(yintercept = 33*0.05, linetype="dotted",color = "red", size=0.5)+
+   geom_hline(yintercept = 48, linetype="dotted",color = "red", size=0.5)
+Main_0122
+
+```
+
+# Compare Metrics in atlas
+```{r}
+MGset_atlas = rbind(biMGset_atlas,conMGset_atlas)
+
+filtered_data_human <- MGset_atlas %>% filter(P < 0.05)   #%>%filter(Dataset=="Human") 
+
+Main_01 = ggplot(filtered_data_human%>%filter(!Property=="Resultant"), aes(x = Metrics, fill=factor(Annotation))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~Dataset)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts",
+    fill = "Annotation"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set2") +
+   geom_hline(yintercept = 29*0.05, linetype="dotted",color = "red", size=0.5)+
+  geom_hline(yintercept = 29, linetype="dotted",color = "red", size=0.5)
+Main_01
+
+ # Group by CT_Pheno and check for the presence of both "Human" and "Mouse"
+#MGset_atlas <- MGset_atlas %>%
+#  group_by(CT_Pheno) %>%
+#  filter(all(c("Human", "Mouse") %in% Dataset)) %>%
+#  ungroup()
+
+
+# Filter data based on P < 0.05
+filtered_data <- MGset_atlas %>% filter(P < 0.05)  
+#%>%filter(Dataset=="Human")
+Main_01 = ggplot(filtered_data%>%filter(!Property=="Resultant"), aes(x = Metrics, fill=factor(Dataset))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~Annotation)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Paired") +
+  geom_hline(yintercept = 27*0.05, linetype="dotted",color = "red", size=0.5)+
+  geom_hline(yintercept = 27, linetype="dotted",color = "red", size=0.5)
+Main_01
+
+
+```
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,479 @@
+
+mkdir /scratch/user/uqali4/Cepo_esw
+
+# CARE normalized, no need to filter cell number
+```{r}
+sce <- readH5AD("/scratch/project_mnt/S0007/uqali4/scdata/CARE_snRNA_Heart_pc.h5ad")
+assay(sce, "counts") <- assay(sce)
+cell_counts <- table(colData(sce)$celltype)
+dexp <- as.matrix(counts(sce))
+
+Cepo_op = Cepo(exprsMat = dexp, cellType = sce$celltype, computePvalue = 100, prefilter_pzero = 0.4)
+
+save(Cepo_op, file = "/scratch/user/uqali4/Cepo_esw/cepo_norm_CARE_snRNA_Heart_pc.rda")
+
+cepo_P=as.data.frame(Cepo_op$pvalues)
+dim(cepo_P)    #15961  genes      12 cell types
+cepo_P$gene <- rownames(cepo_P)
+#moving the gene column to the first position.
+cepo_P=cepo_P%>%relocate(gene) 
+rownames(cepo_P) <- NULL
+
+cepo_metrics <- as.data.frame(Cepo_op$stats)
+cepo_metrics$gene <- rownames(cepo_metrics)
+cepo_metrics <- cepo_metrics %>% relocate(gene)
+rownames(cepo_metrics) <- NULL
+write.table(cepo_metrics, "/scratch/user/uqali4/Cepo_esw/CARE_snRNA_Heart_pc.cepo_norm.csv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+write.table(cepo_P, "/scratch/user/uqali4/Cepo_esw/CARE_snRNA_Heart_pc.cepo_norm.P.csv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+```
+
+```{r}
+sce <- readH5AD("/scratch/project_mnt/S0007/uqali4/scdata/CARE_snRNA_Heart_expr_gene_withPos.h5ad")
+assay(sce, "counts") <- assay(sce)
+cell_counts <- table(colData(sce)$celltype)
+dexp <- as.matrix(counts(sce))
+
+Cepo_op = Cepo(exprsMat = dexp, cellType = sce$celltype, computePvalue = 100, prefilter_pzero = 0.4)
+
+save(Cepo_op, file = "/scratch/user/uqali4/Cepo_esw/cepo_norm_CARE_snRNA_Heart_expr_gene_withPos.rda")
+
+cepo_P=as.data.frame(Cepo_op$pvalues)
+dim(cepo_P)    #15961  genes      12 cell types
+cepo_P$gene <- rownames(cepo_P)
+#moving the gene column to the first position.
+cepo_P=cepo_P%>%relocate(gene) 
+rownames(cepo_P) <- NULL
+
+cepo_metrics <- as.data.frame(Cepo_op$stats)
+cepo_metrics$gene <- rownames(cepo_metrics)
+cepo_metrics <- cepo_metrics %>% relocate(gene)
+rownames(cepo_metrics) <- NULL
+write.table(cepo_metrics, "/scratch/user/uqali4/Cepo_esw/CARE_snRNA_Heart_expr_gene_withPos.cepo_norm.csv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+write.table(cepo_P, "/scratch/user/uqali4/Cepo_esw/CARE_snRNA_Heart_expr_gene_withPos.cepo_norm.P.csv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+```
+
+# Test one example: Run Cepo and P-values
+
+# PD pc abd all, scdata not normalized yet
+```{r}
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+cepo_out_dir <- "/scratch/user/uqali4/Cepo_esw/"
+
+# Loop over each file to process
+file_name="Kamath_2022_normal_pc.h5ad"
+
+cepo_save_file <- paste0(cepo_out_dir, "cepo_norm_", gsub(".h5ad$", ".rda", file_name))
+cepo_metric_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.csv", file_name))
+cepo_p_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.P.csv", file_name))
+  
+
+sce <- readH5AD("/QRISdata/Q5729/Human_sc/raw/PD_Macosko_2023/Kamath_2022_normal_pc.h5ad")
+assay(sce, "counts") <- assay(sce)
+
+dexp <- as.matrix(counts(sce))
+sce2 <- SingleCellExperiment(list(counts=dexp))
+colData(sce2) <- colData(sce)
+rowData(sce2) <- rowData(sce)
+sce2 <- scater::logNormCounts(sce2)
+
+Cepo_op = Cepo(exprsMat = as.matrix(counts(sce2)),
+                      cellType = sce2$Cell_type_refined,
+                      computePvalue = 100,
+                      prefilter_pzero = 0.4)
+
+save(Cepo_op, file=cepo_save_file)
+
+
+
+
+
+cepo_out_dir <- "/scratch/user/uqali4/Cepo_esw/"
+file_name="Kamath_2022_normal_expr_gene_withPos.h5ad"
+cepo_save_file <- paste0(cepo_out_dir, "cepo_norm_", gsub(".h5ad$", ".rda", file_name))
+
+sce <- readH5AD("/scratch/project/genetic_data_analysis/uqali4/scdata/Kamath_2022_normal_expr_gene_withPos.h5ad")
+assay(sce, "counts") <- assay(sce)
+
+dexp <- as.matrix(counts(sce))
+sce2 <- SingleCellExperiment(list(counts=dexp))
+colData(sce2) <- colData(sce)
+rowData(sce2) <- rowData(sce)
+sce2 <- scater::logNormCounts(sce2)
+
+Cepo_op = Cepo(exprsMat = as.matrix(counts(sce2)),
+                      cellType = sce2$Cell_type_refined,
+                      computePvalue = 100,
+                      prefilter_pzero = 0.4)
+
+save(Cepo_op, file=cepo_save_file)
+```
+
+# TEST: Keep only cell number>=40 in cell type
+```{r}
+
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+
+sce <- readH5AD("/scratch/project/genetic_data_analysis/uqali4/scdata/2019_Smillie_normal_cellxgene_pc.h5ad")
+assay(sce, "counts") <- assay(sce)
+
+# Identify cell types with at least 20 cells
+cell_counts <- table(colData(sce)$cell_type)
+cell_types_to_keep <- names(cell_counts[cell_counts >= 40])
+
+# Filter the SingleCellExperiment object to keep only cell types with >= 20 cells
+sce_filtered <- sce[, colData(sce)$cell_type %in% cell_types_to_keep]
+  
+# Update the filtered cell type data
+colData(sce_filtered)$cell_type <- droplevels(colData(sce_filtered)$cell_type)
+  
+# Re-check the filtered cell counts
+cell_counts_filtered <- table(colData(sce_filtered)$cell_type)
+print(cell_counts_filtered)
+  
+# Extract the filtered expression matrix
+dexp <- as.matrix(counts(sce_filtered))
+##' @param prefilter_pzero Numeric value indicating threshold relating to the 
+#' percentage of zero expression of genes. 
+ds_res_pvalues = Cepo(exprsMat = dexp,
+                      cellType = sce_filtered$cell_type,
+                      computePvalue = 100,
+                      prefilter_pzero = 0.4)
+#Prefiltering 273 genes....
+save(ds_res_pvalues, file = "/scratch/user/uqali4/Cepo_esw/2019_Smillie_normal_cellxgene_pc.cepo.rda")
+
+cepo_P=as.data.frame(ds_res_pvalues$pvalues)
+dim(cepo_P)    #16330  genes      8 cell types
+cepo_P$gene <- rownames(cepo_P)
+#moving the gene column to the first position.
+cepo_P=cepo_P%>%relocate(gene) 
+rownames(cepo_P) <- NULL
+write.table(cepo_P,"/scratch/user/uqali4/Cepo_esw/2019_Smillie_normal_cellxgene_pc.cepo.P.csv",row.names=F,col.names=T,quote=F,sep=",")
+
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+# Define file paths and output directories
+
+file_info <- list(
+  '2019_Smillie_normal_cellxgene.h5ad' = "/scratch/project_mnt/S0007/uqali4/scdata/2019_Smillie_normal_cellxgene.h5ad",
+  '2019_Smillie_normal_cellxgene_pc.h5ad' = "/scratch/project_mnt/S0007/uqali4/scdata/2019_Smillie_normal_cellxgene_pc.h5ad",
+  'FBM_Jardine_2021_Nature_pc.h5ad' = "/scratch/project_mnt/S0007/uqali4/scdata/FBM_Jardine_2021_Nature_pc.h5ad",
+  'FBM_Jardine_2021_Nature.h5ad' = "/scratch/project_mnt/S0007/uqali4/scdata/FBM_Jardine_2021_Nature.h5ad"
+)
+# Base directories for saving results
+cepo_out_dir <- "/scratch/user/uqali4/Cepo_esw/"
+
+# Loop over each file to process
+for (file_name in names(file_info)) {
+  # Construct input and output paths
+  input_file <- file_info[[file_name]]
+  cepo_save_file <- paste0(cepo_out_dir, "cepo_norm_", gsub(".h5ad$", ".rda", file_name))
+  cepo_metric_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.csv", file_name))
+  cepo_p_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.P.csv", file_name))
+  
+  # Load the data
+  sce <- readH5AD(input_file)
+  print(paste("Processing file:", file_name))
+  
+  # Identify cell types with at least 20 cells
+  cell_counts <- table(colData(sce)$cell_type)
+  cell_types_to_keep <- names(cell_counts[cell_counts >= 40])
+  
+  # Filter the SingleCellExperiment object to keep only cell types with >= 20 cells
+  sce_filtered <- sce[, colData(sce)$cell_type %in% cell_types_to_keep]
+  
+  # Update the filtered cell type data
+  colData(sce_filtered)$cell_type <- droplevels(colData(sce_filtered)$cell_type)
+  
+  # Re-check the filtered cell counts
+  cell_counts_filtered <- table(colData(sce_filtered)$cell_type)
+  print(cell_counts_filtered)
+  
+  assay(sce_filtered, "counts") <- assay(sce_filtered)
+  # Extract the filtered expression matrix
+  dexp <- as.matrix(counts(sce_filtered))
+
+  Cepo_op = Cepo(dexp, sce_filtered$cell_type, computePvalue = 100, prefilter_pzero = 0.4)
+
+  cepo_P=as.data.frame(Cepo_op$pvalues)
+  dim(cepo_P)    #16330  genes      8 cell types
+  cepo_P$gene <- rownames(cepo_P)
+  #moving the gene column to the first position.
+  cepo_P=cepo_P%>%relocate(gene) 
+  rownames(cepo_P) <- NULL
+  
+  # Save the Cepo result
+  save(Cepo_op, file = cepo_save_file)
+  print(paste("Cepo results saved to:", cepo_save_file))
+
+  # Prepare and save cepo metrics
+  cepo_metrics <- as.data.frame(Cepo_op$stats)
+  cepo_metrics$gene <- rownames(cepo_metrics)
+  cepo_metrics <- cepo_metrics %>% relocate(gene)
+  rownames(cepo_metrics) <- NULL
+  
+  # Write the output to a compressed CSV file
+  write.table(cepo_metrics, cepo_metric_out_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+  write.table(cepo_P, cepo_p_out_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+
+}
+
+```
+
+
+
+```{r}
+# Load necessary libraries
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+# Define file paths and output directories
+file_info <- list(
+  'Cheng_2018_Cell_Reports_updated.h5ad' = "/scratch/project/genetic_data_analysis/uqali4/scdata/Cheng_2018_Cell_Reports_updated.h5ad",
+  'Cheng_2018_Cell_Reports_pc.h5ad' = "/scratch/project/genetic_data_analysis/uqali4/scdata/Cheng_2018_Cell_Reports_pc.h5ad",
+  'Fasolino_2022_Nat_Metab_normal_only_pc.h5ad' = "/scratch/project/genetic_data_analysis/uqali4/scdata/Fasolino_2022_Nat_Metab_normal_only_pc.h5ad",
+  'Fasolino_2022_Nat_Metab_normal_only.h5ad' = "/scratch/project/genetic_data_analysis/uqali4/scdata/Fasolino_2022_Nat_Metab_normal_only.h5ad",
+  'human_liver_atlas_Guilliams_2022_cell_pc.h5ad' = "/scratch/project/genetic_data_analysis/uqali4/scdata/human_liver_atlas_Guilliams_2022_cell_pc.h5ad",
+  'human_liver_atlas_Guilliams_2022_cell.h5ad' = "/scratch/project/genetic_data_analysis/uqali4/scdata/human_liver_atlas_Guilliams_2022_cell.h5ad"
+)
+
+# Base directories for saving results
+cepo_save_dir <- "/scratch/user/uqali4/Cepo_esw/"
+cepo_out_dir <- "/scratch/user/uqali4/Cepo_esw/"
+
+# Loop over each file to process
+for (file_name in names(file_info)) {
+  
+  # Construct input and output paths
+  input_file <- file_info[[file_name]]
+  cepo_save_file <- paste0(cepo_save_dir, "cepo_norm_", gsub(".h5ad$", ".rda", file_name))
+  
+  # Load the data
+  sce <- readH5AD(input_file)
+  print(paste("Processing file:", file_name))
+  
+  # Extract counts and cell type data
+  assay(sce, "counts") <- assay(sce)
+  exp <- counts(sce) 
+  dexp <- as.matrix(exp)
+  cell_types <- colData(sce)$cell_type
+  Cepo_op = Cepo(exprsMat = dexp,
+                      cellType = cell_types,
+                      computePvalue = 100,
+                      prefilter_pzero = 0.4)
+  
+  # Save the Cepo result
+  save(Cepo_op, file = cepo_save_file)
+  print(paste("Cepo results saved to:", cepo_save_file))
+  
+}
+
+
+
+```
+
+
+# HLCA  LP
+```{r}
+
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+cepo_out_dir <- "/scratch/user/uqali4/Cepo_esw/"
+file_name="HLCA_core_healthy_LP_expr_gene_withPos.h5ad"
+
+cepo_save_file <- paste0(cepo_out_dir, "cepo_norm_", gsub(".h5ad$", ".rda", file_name))
+#cepo_metric_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.csv", file_name))
+#cepo_p_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.P.csv", file_name))
+  
+sce <- readH5AD("/scratch/project/genetic_data_analysis/uqali4/scdata/HLCA_core_healthy_LP_expr_gene_withPos.h5ad")
+assay(sce, "counts") <- assay(sce)
+exp <- counts(sce) 
+dexp <- as.matrix(exp)
+# Replace spaces, commas, and hyphens with underscores in the cell_type column
+sce$cell_type <- as.factor(gsub("[ ,\\-]", "_", as.character(sce$cell_type)))
+
+cell_types <- colData(sce)$cell_type  #!!!! 
+
+sce2 <- SingleCellExperiment(list(counts=dexp))
+colData(sce2) <- colData(sce)
+rowData(sce2) <- rowData(sce)
+sce2 <- scater::logNormCounts(sce2)
+
+Cepo_op <- Cepo(as.matrix(counts(sce2)), cell_types, computePvalue = 100, prefilter_pzero = 0.4)  
+save(Cepo_op, file=cepo_save_file)
+
+#################################################################################################################
+
+#################################################################################################################
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+cepo_out_dir <- "/scratch/user/uqali4/Cepo_esw/"
+file_name="HLCA_core_healthy_LP_pc.h5ad"
+
+cepo_save_file <- paste0(cepo_out_dir, "cepo_norm_", gsub(".h5ad$", ".rda", file_name))
+#cepo_metric_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.csv", file_name))
+#cepo_p_out_file <- paste0(cepo_out_dir, gsub(".h5ad$", ".cepo_norm.P.csv", file_name))
+  
+sce <- readH5AD("/scratch/project/genetic_data_analysis/uqali4/scdata/HLCA_core_healthy_LP_pc.h5ad")
+assay(sce, "counts") <- assay(sce)
+exp <- counts(sce) 
+dexp <- as.matrix(exp)
+# Replace spaces, commas, and hyphens with underscores in the cell_type column
+sce$cell_type <- as.factor(gsub("[ ,\\-]", "_", as.character(sce$cell_type)))
+
+cell_types <- colData(sce)$cell_type  #!!!! 
+
+sce2 <- SingleCellExperiment(list(counts=dexp))
+colData(sce2) <- colData(sce)
+rowData(sce2) <- rowData(sce)
+sce2 <- scater::logNormCounts(sce2)
+
+Cepo_op <- Cepo(as.matrix(counts(sce2)), cell_types, computePvalue = 100, prefilter_pzero = 0.4)  
+save(Cepo_op, file=cepo_save_file)
+
+
+```
+
+
+
+# TMS and TS
+# TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad
+# TMS_pc_ortholog_with_TS_minCell20.h5ad
+```{r}
+
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(SingleCellExperiment)
+library(zellkonverter)
+library(Cepo)
+
+# Define directories and input file names
+cepo_out_dir <- "/scratch/user/uqali4/Cepo_esw/"
+file_names <- c("TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad", 
+                "TMS_pc_ortholog_with_TS_minCell20.h5ad")
+
+# Define function to process each file
+process_file <- function(file_name, cepo_out_dir) {
+  # Construct file paths
+  sce_path <- paste0("/scratch/project/genetic_data_analysis/uqali4/scdata/", file_name)
+  cepo_save_file <- paste0(cepo_out_dir, "cepo_norm_", gsub(".h5ad$", ".rda", file_name))
+  
+  # Load the SingleCellExperiment object
+  sce <- readH5AD(sce_path)
+  assay(sce, "counts") <- assay(sce)
+  
+  # Identify cell types with at least 40 cells
+  cell_counts <- table(colData(sce)$cell_ontology_class)
+  cell_types_to_keep <- names(cell_counts[cell_counts >= 40])
+  
+  # Filter the SingleCellExperiment object
+  sce_filtered <- sce[, colData(sce)$cell_ontology_class %in% cell_types_to_keep]
+  colData(sce_filtered)$cell_ontology_class <- droplevels(colData(sce_filtered)$cell_ontology_class)
+  
+  # Re-check the filtered cell counts
+  cell_counts_filtered <- table(colData(sce_filtered)$cell_ontology_class)
+  print(cell_counts_filtered)
+  
+  # Extract the filtered expression matrix
+  dexp <- as.matrix(counts(sce_filtered))
+  
+  # Run Cepo analysis
+  Cepo_op <- Cepo(exprsMat = dexp, 
+                  cellType = sce_filtered$cell_ontology_class, 
+                  computePvalue = 100, 
+                  prefilter_pzero = 0.4)
+  
+  # Save the results
+  save(Cepo_op, file = cepo_save_file)
+}
+
+# Loop over each file to process
+for (file_name in file_names) {
+  process_file(file_name, cepo_out_dir)
+}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

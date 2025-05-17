@@ -1,0 +1,1139 @@
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/geneset_res/PCgenes_background/TMS_TS_PC_allCT_8metrics_MAGMAgeneset.txt /Users/uqali4/Manuscripts/Benchmark/
+
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/geneset_res/PCgenes_background/All_organ_CT_PC_8metrics_MAGMAgeneset_results.txt /Users/uqali4/Manuscripts/Benchmark/
+
+
+# Pipeline for TS and TMS based MAGMA gene-set based tests:
+metrics_dirs=("TDEP" "cepo_norm" "det.esw_s" "ep.esw_s" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker")
+Part of the results:/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based
+Part of the results:/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/ts_pc/${dir_name}/MAGMA_100kb_based
+Part of the results:/scratch/user/uqali4/geneset_res/PCgenes_background/ts_pc/${dir_name}/MAGMA_100kb_based
+Part of the results:/scratch/user/uqali4/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based
+```{r}
+library(tidyverse)
+library(data.table)
+
+# Define file prefixes (datasets) and metrics
+file_prefixes <- c("tms_pc", "ts_pc")
+metrics_dirs <- c("TDEP", "cepo_norm", "det.esw_s", "ep.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker")
+
+# Define traits
+traits_dt <- fread("/QRISdata/Q5729/job_list.txt", h = FALSE)
+names(traits_dt) <- "file"
+traits <- traits_dt$file
+
+# Initialize an empty data frame to store all results
+all <- NULL
+
+# Define the base directories
+base_dirs <- c(
+  "/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background",
+  "/scratch/user/uqali4/geneset_res/PCgenes_background"
+)
+
+# Loop over each base directory, dataset (file prefix), metric directory, and trait
+for (base_dir in base_dirs) {
+  for (dataset in file_prefixes) {
+    for (dir_name in metrics_dirs) {
+      for (trait in traits) {
+        
+        # Construct the file path based on the dataset, metric, and trait
+        file_path <- paste0(base_dir, "/", dataset, "/", dir_name, "/MAGMA_100kb_based/", trait, ".gsa.out")
+        
+        # Check if the file exists
+        if (file.exists(file_path)) {
+          # Read the file if it exists
+          df <- read.table(file_path, skip = 3, header = TRUE)
+          
+          # Check if the column 'FULL_NAME' exists, if not add it
+          if (!"FULL_NAME" %in% colnames(df)) {
+            df$FULL_NAME <- df$VARIABLE
+          }
+          
+          # Add additional columns
+          df$Dataset <- dataset
+          df$Trait <- trait
+          df$Metrics <- dir_name
+          df$Method <- "MAGMA gene-set"
+          
+          # Reorder columns as specified
+          df <- df[, c("VARIABLE", "TYPE", "NGENES", "BETA", "BETA_STD", "SE", "P",
+                       "FULL_NAME", "Dataset", "Trait", "Metrics", "Method")]
+          
+          # Combine with the 'all' dataframe
+          all <- rbind(all, df)
+        } else {
+          # Optionally print a message if the file does not exist
+          cat("File does not exist:", file_path, "\n")
+        }
+      }
+    }
+  }
+}
+
+# Select relevant columns and write to the output file
+op <- all %>% select(!c("VARIABLE", "TYPE"))
+
+# Optionally write the result to a file
+write.table(op, "/scratch/user/uqali4/geneset_res/PCgenes_background/TMS_TS_PC_allCT_8metrics_MAGMAgeneset.txt",
+             row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+```
+
+
+# PC genes results of MG-set from atlas
+```{r}
+library(tidyverse)
+library(data.table)
+
+# Define the CT directories directly (no more file prefixes)
+ct_directories <- c(
+  "ts_pc",
+  "tms_pc"
+)
+
+# Define the metrics directories
+metrics_dirs <- c("TDEP", "cepo_norm", "det.esw_s", "ep.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker")
+
+# Define traits
+traits_dt <- fread("/QRISdata/Q5729/job_list.txt", h = FALSE)
+names(traits_dt) <- "file"
+traits <- traits_dt$file
+
+# Initialize an empty data frame to store all results
+all <- NULL
+
+# Define the base directory
+base_dir <- "/scratch/user/uqali4/geneset_res/PCgenes_background"
+
+# Loop over each CT directory, metric directory, and trait
+for (ct_dir in ct_directories) {
+  for (dir_name in metrics_dirs) {
+    for (trait in traits) {
+      
+      # Construct the file path based on the CT directory, metric, and trait
+      file_path <- paste0(base_dir, "/", ct_dir, "/", dir_name, "/MAGMA_100kb_based/", trait, ".gsa.out")
+      
+      # Check if the file exists
+      if (file.exists(file_path)) {
+        # Read the file if it exists
+        print(file_path)
+        df <- read.table(file_path, skip = 3, header = TRUE)
+        
+        # Check if the column 'FULL_NAME' exists, if not add it
+        if (!"FULL_NAME" %in% colnames(df)) {
+          df$FULL_NAME <- df$VARIABLE
+        }
+        
+        # Add additional columns
+        df$Dataset <- ct_dir
+        df$Trait <- trait
+        df$Metrics <- dir_name
+        df$Method <- "MAGMA gene-set"
+        df$gene_group <- "PCgene"
+        
+        # Reorder columns as specified
+        df <- df[, c("VARIABLE", "TYPE", "NGENES", "BETA", "BETA_STD", "SE", "P",
+                     "FULL_NAME", "Dataset", "Trait", "Metrics", "Method","gene_group")]
+        
+        # Combine with the 'all' dataframe
+        all <- rbind(all, df)
+      } else {
+        # Optionally print a message if the file does not exist
+        cat("File does not exist:", file_path, "\n")
+      }
+    }
+  }
+}
+
+# Select relevant columns and write to the output file
+op <- all %>% select(!c("VARIABLE", "TYPE"))
+
+# Write the result to a file
+write.table(op, "/scratch/user/uqali4/geneset_res/PCgenes_background/TMS_TS_PC_allCT_8metrics_MAGMAgeneset.txt",
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+```
+
+
+# PC genes results of MG-set from single organ
+```{r}
+library(tidyverse)
+library(data.table)
+
+# Define the CT directories directly (no more file prefixes)
+ct_directories <- c(
+  "ctd_2019_Smillie_normal_cellxgene_pc",
+  "ctd_Cheng_2018_Cell_Reports_pc",
+  "ctd_Fasolino_2022_Nat_Metab_normal_only_pc",
+  "ctd_FBM_Jardine_2021_Nature_pc",
+  "ctd_human_liver_atlas_Guilliams_2022_cell_pc",
+  "HLCA_core_healthy_pc",
+  "Kamath_2022_normal_pc",
+  "CARE_pc"
+)
+
+# Define the metrics directories
+metrics_dirs <- c("TDEP", "cepo_norm", "det.esw_s", "ep.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker")
+
+# Define traits
+traits_dt <- fread("/QRISdata/Q5729/job_list.txt", h = FALSE)
+names(traits_dt) <- "file"
+traits <- traits_dt$file
+
+# Initialize an empty data frame to store all results
+all <- NULL
+
+# Define the base directory
+base_dir <- "/scratch/user/uqali4/geneset_res/PCgenes_background"
+
+# Loop over each CT directory, metric directory, and trait
+for (ct_dir in ct_directories) {
+  for (dir_name in metrics_dirs) {
+    for (trait in traits) {
+      
+      # Construct the file path based on the CT directory, metric, and trait
+      file_path <- paste0(base_dir, "/", ct_dir, "/", dir_name, "/MAGMA_100kb_based/", trait, ".gsa.out")
+      
+      # Check if the file exists
+      if (file.exists(file_path)) {
+        # Read the file if it exists
+        df <- read.table(file_path, skip = 3, header = TRUE)
+        
+        # Check if the column 'FULL_NAME' exists, if not add it
+        if (!"FULL_NAME" %in% colnames(df)) {
+          df$FULL_NAME <- df$VARIABLE
+        }
+        
+        # Add additional columns
+        df$Dataset <- ct_dir
+        df$Trait <- trait
+        df$Metrics <- dir_name
+        df$Method <- "MAGMA gene-set"
+        df$gene_group <- "PCgene"
+        
+        # Reorder columns as specified
+        df <- df[, c("VARIABLE", "TYPE", "NGENES", "BETA", "BETA_STD", "SE", "P",
+                     "FULL_NAME", "Dataset", "Trait", "Metrics", "Method","gene_group")]
+        
+        # Combine with the 'all' dataframe
+        all <- rbind(all, df)
+      } else {
+        # Optionally print a message if the file does not exist
+        cat("File does not exist:", file_path, "\n")
+      }
+    }
+  }
+}
+
+# Select relevant columns and write to the output file
+op <- all %>% select(!c("VARIABLE", "TYPE"))
+
+# Write the result to a file
+write.table(op, "/scratch/user/uqali4/geneset_res/PCgenes_background/All_organ_CT_PC_8metrics_MAGMAgeneset_results.txt",
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+```
+
+
+
+
+
+# The specificity value is ready;
+# The background genes should be the corresponding PC genes instead of all genes' based results.
+
+# Step01: Exact the PC genes results part 
+# 01. TMS-TS concordant PC genes
+ I reran MAGMA-gene test with different gene annotations agian:~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/MAGMA_gene_based_Test.Rmd
+# Output:/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist
+gene_pc <- fread("/QRISdata/Q5059/data/ts/TMS_ortholog_with_TS_minCell20_pcgene_list.csv")
+
+# NOT useful below:
+```{r}
+
+library(data.table)
+
+# Define file paths
+gene_output_dir <- "/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes/"
+pcgene_list_file <- "/QRISdata/Q5059/data/ts/TMS_ortholog_with_TS_minCell20_pcgene_list.csv"
+output_dir <- "/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist/"
+
+# Create the output directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Read the pcgene list
+pcgene_list <- fread(pcgene_list_file)$Gene
+
+# Get all *.genes.out files in the directory
+gene_files <- list.files(path = gene_output_dir, pattern = "*.genes.out", full.names = TRUE)
+
+# Function to extract matching genes from each file
+process_gene_file <- function(file) {
+  # Read the gene file
+  gene_data <- fread(file)
+  
+  # Filter for genes in the pcgene list
+  filtered_genes <- gene_data[GENE %in% pcgene_list]
+  
+  # Define the output file name
+  output_file <- paste0(output_dir, basename(file))
+  
+  # Save the filtered data
+  fwrite(filtered_genes, output_file)
+}
+
+# Apply the function to all gene files
+lapply(gene_files, process_gene_file)
+
+
+
+
+```
+
+# 02. Human PC genes
+I reran MAGMA-gene test with different gene annotations agian:~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/MAGMA_gene_based_Test.Rmd
+# NOT useful below: 
+# Output: /scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc
+```{r}
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(reshape2)
+
+# Define file paths
+input_dir <- "/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes/"
+
+# Filter for protein-coding genes if file ends in _pc
+
+# Read gene coordinates file and process
+gene_coordinates <- read_tsv("/scratch/project/genetic_data_analysis/uqali4/geneMatrix.56778genes.tsv",
+                             col_names = TRUE, col_types = 'cciicc') %>% filter(gene_type == "protein_coding") 
+
+output_dir <- "/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc/"
+
+gene_pc_vec <- gene_coordinates$Gene
+
+# List all .genes.raw files in the input directory
+gene_files <- list.files(path = input_dir, pattern = "*.genes.raw", full.names = TRUE)
+
+# Function to filter and save genes from .genes.raw files
+filter_and_save_genes <- function(file_path, gene_list, output_dir) {
+  # Read the raw file line by line
+  lines <- readLines(file_path)
+  
+  # Separate the header (lines starting with #)
+  header <- lines[grepl("^#", lines)]
+  
+  # Filter the data lines (not starting with #) by gene name
+  data_lines <- lines[!grepl("^#", lines)]
+  filtered_data_lines <- data_lines[sapply(data_lines, function(line) {
+    gene_id <- strsplit(line, " ")[[1]][1]  # Extract the gene ID (first column)
+    return(gene_id %in% gene_list)
+  })]
+  
+  # Define output file name
+  output_file <- paste0(output_dir, basename(file_path))
+  
+  # Write the header to the output file
+  writeLines(header, con = output_file)
+  
+  # Append the filtered data to the output file
+  cat(filtered_data_lines, sep = "\n", file = output_file, append = TRUE)
+  
+  # Print a message
+  cat("Filtered file saved:", output_file, "\n")
+}
+
+# Loop through each .genes.raw file and apply the filtering
+for (file in gene_files) {
+  filter_and_save_genes(file, gene_pc_vec, output_dir)
+}
+
+```
+
+
+# Step02: Run MAGMA gene-set based tests.
+
+cd /home/uqali4/uqali4/scripts/MGset/PC
+
+vi 2019_Smillie_normal_cellxgene_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=ctd_2019_Smillie_normal_cellxgene_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc"
+metrics_dirs=("TDEP" "cepo_norm" "det.esw_s" "ep.esw_s" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker") #"TDEP" "cepo_norm" "det.esw_s" "ep.esw_s" "esmu" 
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q2120/biLDSC/${dir_name}/processed/ctd_2019_Smillie_normal_cellxgene_pc/MAGMA/top10.txt"
+  # Check if the output file already exists
+  output_file="${res_dir}/${trait}.gsa.out"
+  if [ ! -f "$output_file" ]; then
+    echo "Running MAGMA for $trait in $dir_name..."
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene_pc/${dir_name}/MAGMA_100kb_based
+  new_res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene_pc/${dir_name}/MAGMA_100kb_based"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $new_res_dir/${trait}
+  else
+    echo "Output file $output_file already exists. Skipping..."
+  fi
+done
+
+
+```
+
+
+
+# Bash Script to generated .sh Files
+```{bash}
+#!/bin/bash
+cd /home/uqali4/uqali4/scripts/MGset/PC2
+# Define the file prefixes
+file_prefixes=(
+  "Cheng_2018_Cell_Reports_pc"
+  "Fasolino_2022_Nat_Metab_normal_only_pc"
+  "FBM_Jardine_2021_Nature_pc"
+  "human_liver_atlas_Guilliams_2022_cell_pc"
+)
+
+# Read the original script content
+original_script="/home/uqali4/scripts/2019_Smillie_normal_cellxgene_pc_magma_geneset_benchmark_100kb.sh"
+script_content=$(<"$original_script")
+
+# Loop through each prefix and create a new script with the appropriate prefix
+for prefix in "${file_prefixes[@]}"; do
+  # Create a new file name based on the prefix
+  new_script="${prefix}_magma_geneset_benchmark_100kb.sh"
+  
+  # Replace the original prefix with the new prefix in the content
+  new_content="${script_content//2019_Smillie_normal_cellxgene_pc/$prefix}"
+  
+  # Write the modified content to the new file
+  echo "$new_content" > "$new_script"
+  
+  echo "Generated script: $new_script"
+done
+
+```
+
+vi tms_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=18
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=tms_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.error
+#SBATCH --output=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist"
+metrics_dirs=("cepo_norm" "det.esw_s" "TDEP" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s")
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/MGset_full/tms_pc/${dir_name}/MAGMA/top10.txt"
+  mkdir -p /QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based
+  res_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $res_dir/${trait}
+done
+
+```
+
+# Bash Script to generated .sh Files
+```{bash}
+#!/bin/bash
+cd /home/uqali4/uqali4/scripts/MGset/PC
+# Define the file prefixes
+file_prefixes=(
+  "tms_pc"
+  "ts_pc"
+)
+
+# Read the original script content
+original_script="tms_pc_magma_geneset_benchmark_100kb.sh"
+script_content=$(<"$original_script")
+
+# Loop through each prefix and create a new script with the appropriate prefix
+for prefix in "${file_prefixes[@]}"; do
+  # Create a new file name based on the prefix
+  new_script="${prefix}_magma_geneset_benchmark_100kb.sh"
+  
+  # Replace the original prefix with the new prefix in the content
+  new_content="${script_content//tms_pc/$prefix}"
+  
+  # Write the modified content to the new file
+  echo "$new_content" > "$new_script"
+  
+  echo "Generated script: $new_script"
+done
+
+```
+
+cd /home/uqali4/uqali4/scripts/MGset/PC
+vi Kamath_2022_normal_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=18
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=Kamath_2022_normal_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.error
+#SBATCH --output=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc"
+metrics_dirs=("cepo_norm" "det.esw_s" "TDEP" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s")
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/Binary_baseline1.1/Kamath_2022_normal_pc/${dir_name}/MAGMA/top10.txt"
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/Kamath_2022_normal_pc/${dir_name}/MAGMA_100kb_based
+  res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/Kamath_2022_normal_pc/${dir_name}/MAGMA_100kb_based"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $res_dir/${trait}
+done
+
+
+```
+
+
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=18
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=CARE_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc"
+metrics_dirs=("cepo_norm" "det.esw_s" "TDEP" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s")
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/Binary_baseline1.1/CARE_pc/${dir_name}/MAGMA/top10.txt"
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/CARE_pc/${dir_name}/MAGMA_100kb_based
+  res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/CARE_pc/${dir_name}/MAGMA_100kb_based"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $res_dir/${trait}
+done
+```
+
+
+
+
+
+/QRISdata/Q5514/Binary_baseline1.1/HLCA_core_healthy_allgenes/LP/det.esw_s/MAGMA/top10.txt
+
+# Bash Script to Submit Generated .sh Files
+```{bash}
+#!/bin/bash
+cd /home/uqali4/uqali4/scripts/MGset/PC
+# Define the file prefixes
+file_prefixes=(
+  "Kamath_2022_normal_pc"
+  "Kamath_2022_normal"
+  "CARE"
+  "CARE_pc"
+)
+
+# Read the original script content
+original_script="Kamath_2022_normal_pc_magma_geneset_benchmark_100kb.sh"
+script_content=$(<"$original_script")
+
+# Loop through each prefix and create a new script with the appropriate prefix
+for prefix in "${file_prefixes[@]}"; do
+  # Create a new file name based on the prefix
+  new_script="${prefix}_magma_geneset_benchmark_100kb.sh"
+  
+  # Replace the original prefix with the new prefix in the content
+  new_content="${script_content//Kamath_2022_normal_pc/$prefix}"
+  
+  # Write the modified content to the new file
+  echo "$new_content" > "$new_script"
+  
+  echo "Generated script: $new_script"
+done
+
+```
+
+
+cd /home/uqali4/scripts
+vi HLCA_core_healthy_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=18
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=HLCA_core_healthy_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.error
+#SBATCH --output=/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc"
+metrics_dirs=("cepo_norm" "det.esw_s" "TDEP" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s")
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/Binary_baseline1.1/HLCA_core_healthy_pc/LP/${dir_name}/MAGMA/top10.txt"
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/HLCA_core_healthy_pc/${dir_name}/MAGMA_100kb_based
+  res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/HLCA_core_healthy_pc/${dir_name}/MAGMA_100kb_based"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $res_dir/${trait}
+done
+
+
+```
+
+
+
+cd /QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/ For all genes parts are wrong.
+
+# Bash Script to Submit Generated .sh Files
+```{bash}
+#!/bin/bash
+cd /home/uqali4/uqali4/scripts/MGset/PC
+# Define the file prefixes
+file_prefixes=(
+  "HLCA_core_healthy_allgenes"
+  "HLCA_core_healthy_pc"
+)
+
+# Read the original script content
+original_script="HLCA_core_healthy_allgenes_LP_magma_geneset_benchmark_100kb.sh"
+script_content=$(<"$original_script")
+
+# Loop through each prefix and create a new script with the appropriate prefix
+for prefix in "${file_prefixes[@]}"; do
+  # Create a new file name based on the prefix
+  new_script="${prefix}_magma_geneset_benchmark_100kb.sh"
+  
+  # Replace the original prefix with the new prefix in the content
+  new_content="${script_content//HLCA_core_healthy_allgenes/$prefix}"
+  
+  # Write the modified content to the new file
+  echo "$new_content" > "$new_script"
+  
+  echo "Generated script: $new_script"
+done
+
+```
+
+
+# Submit all scripts:
+```{bash}
+sh_directory="/home/uqali4/uqali4/scripts/MGset/PC2"
+# Loop through all *_MAGMA_scDRS.sh files in the directory
+for sh_file in "$sh_directory"/*.sh; do
+  
+  # Submit the job using sbatch
+  sbatch "$sh_file"
+  
+done
+```
+
+
+# Bash script that will submit all scripts in the /scratch/project/genetic_data_analysis/uqali4/scripts/MGset/PC directory, except tms_pc_magma_geneset_benchmark_100kb.sh and ts_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#!/bin/bash
+
+# Define the directory containing the .sh files
+script_dir="/scratch/project/genetic_data_analysis/uqali4/scripts/MGset/PC"
+
+# Loop through all .sh files in the directory
+for file in "$script_dir"/*.sh; do
+    # Use sed to remove the specified string and overwrite the file
+    sed -i 's|/home/uqali4/jobs_sterr_stout/MAGMA_benchmark/||g' "$file"
+    
+    # Print a message indicating the file has been processed
+    echo "Processed: $file"
+done
+
+
+# Define the script directory
+SCRIPT_DIR="/scratch/project/genetic_data_analysis/uqali4/scripts/MGset/PC"
+
+# Exclude these two scripts
+EXCLUDE1="tms_pc_magma_geneset_benchmark_100kb.sh"
+EXCLUDE2="ts_pc_magma_geneset_benchmark_100kb.sh"
+
+# Loop through each script in the directory
+for script in "$SCRIPT_DIR"/*.sh; do
+    # Get the base name of the script (without the directory path)
+    base_script=$(basename "$script")
+
+    # Check if the script is one of the excluded scripts
+    if [[ "$base_script" != "$EXCLUDE1" && "$base_script" != "$EXCLUDE2" ]]; then
+        # Submit the script using the appropriate command (e.g., sbatch for Slurm)
+        echo "Submitting script: $base_script"
+        sbatch "$script"
+    else
+        echo "Skipping excluded script: $base_script"
+    fi
+done
+
+```
+
+
+# Check all the subdirectories under and count how many gsa.out files are
+```{bash}
+#!/bin/bash
+
+# Base directory
+
+
+base_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene"
+
+base_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene_pc"
+
+
+base_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/Kamath_2022_normal_pc"
+
+# Loop through all subdirectories under MAGMA_100kb_based
+for dir in "$base_dir"/*/MAGMA_100kb_based; do
+    # Check if the directory exists
+    if [ -d "$dir" ]; then
+        echo "Checking directory: $dir"
+        
+        # Count the number of gsa.out files
+        count=$(ls -l "$dir" | grep "gsa.out" | wc -l)
+        
+        echo "Number of gsa.out files in $dir: $count"
+    else
+        echo "Directory $dir does not exist."
+    fi
+done
+
+
+base_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/tms_pc"
+
+# Loop through all subdirectories under MAGMA_100kb_based
+for dir in "$base_dir"/*/MAGMA_100kb_based; do
+    # Check if the directory exists
+    if [ -d "$dir" ]; then
+        echo "Checking directory: $dir"
+        
+        # Count the number of gsa.out files
+        count=$(ls -l "$dir" | grep "gsa.out" | wc -l)
+        
+        echo "Number of gsa.out files in $dir: $count"
+    else
+        echo "Directory $dir does not exist."
+    fi
+done
+
+base_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/tms_pc"
+
+# Loop through all subdirectories under MAGMA_100kb_based
+for dir in "$base_dir"/*/MAGMA_100kb_based; do
+    # Check if the directory exists
+    if [ -d "$dir" ]; then
+        echo "Checking directory: $dir"
+        
+        # Count the number of gsa.out files
+        count=$(ls -l "$dir" | grep "gsa.out" | wc -l)
+        
+        echo "Number of gsa.out files in $dir: $count"
+    else
+        echo "Directory $dir does not exist."
+    fi
+done
+
+
+base_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ctd_Fasolino_2022_Nat_Metab_normal_only_pc"
+
+# Loop through all subdirectories under MAGMA_100kb_based
+for dir in "$base_dir"/*/MAGMA_100kb_based; do
+    # Check if the directory exists
+    if [ -d "$dir" ]; then
+        echo "Checking directory: $dir"
+        
+        # Count the number of gsa.out files
+        count=$(ls -l "$dir" | grep "gsa.out" | wc -l)
+        
+        echo "Number of gsa.out files in $dir: $count"
+    else
+        echo "Directory $dir does not exist."
+    fi
+done
+
+
+
+base_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ctd_FBM_Jardine_2021_Nature_pc"
+
+# Loop through all subdirectories under MAGMA_100kb_based
+for dir in "$base_dir"/*/MAGMA_100kb_based; do
+    # Check if the directory exists
+    if [ -d "$dir" ]; then
+        echo "Checking directory: $dir"
+        
+        # Count the number of gsa.out files
+        count=$(ls -l "$dir" | grep "gsa.out" | wc -l)
+        
+        echo "Number of gsa.out files in $dir: $count"
+    else
+        echo "Directory $dir does not exist."
+    fi
+done
+
+
+
+base_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ctd_Cheng_2018_Cell_Reports_pc"
+
+# Loop through all subdirectories under MAGMA_100kb_based
+for dir in "$base_dir"/*/MAGMA_100kb_based; do
+    # Check if the directory exists
+    if [ -d "$dir" ]; then
+        echo "Checking directory: $dir"
+        
+        # Count the number of gsa.out files
+        count=$(ls -l "$dir" | grep "gsa.out" | wc -l)
+        
+        echo "Number of gsa.out files in $dir: $count"
+    else
+        echo "Directory $dir does not exist."
+    fi
+done
+
+
+base_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/HLCA_core_healthy_pc"
+
+# Loop through all subdirectories under MAGMA_100kb_based
+for dir in "$base_dir"/*/MAGMA_100kb_based; do
+    # Check if the directory exists
+    if [ -d "$dir" ]; then
+        echo "Checking directory: $dir"
+        
+        # Count the number of gsa.out files
+        count=$(ls -l "$dir" | grep "gsa.out" | wc -l)
+        
+        echo "Number of gsa.out files in $dir: $count"
+    else
+        echo "Directory $dir does not exist."
+    fi
+done
+```
+
+# Revise new version with checking if the results have been finished.
+vi ts_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=18
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=ts_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist"
+metrics_dirs=("cepo_norm" "det.esw_s" "TDEP" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s") #
+
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/MGset_full/ts_pc/${dir_name}/MAGMA/top10.txt"
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/ts_pc/${dir_name}/MAGMA_100kb_based
+  res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ts_pc/${dir_name}/MAGMA_100kb_based"
+  
+  # Check if the output file already exists
+  output_file="${res_dir}/${trait}.gsa.out"
+  if [ ! -f "$output_file" ]; then
+    echo "Running MAGMA for $trait in $dir_name..."
+    /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $res_dir/${trait}
+  else
+    echo "Output file $output_file already exists. Skipping..."
+  fi
+done
+
+```
+
+vi tms_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=18
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=tms_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist"
+metrics_dirs=("cepo_norm" "det.esw_s" "TDEP" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s") #
+
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/MGset_full/tms_pc/${dir_name}/MAGMA/top10.txt"
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based
+  res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based"
+  
+  # Check if the output file already exists
+  output_file="${res_dir}/${trait}.gsa.out"
+  if [ ! -f "$output_file" ]; then
+    echo "Running MAGMA for $trait in $dir_name..."
+    /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $res_dir/${trait}
+  else
+    echo "Output file $output_file already exists. Skipping..."
+  fi
+done
+
+```
+
+
+vi tms_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=tms_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist"
+metrics_dirs=("esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s") #"cepo_norm" "det.esw_s" "TDEP" 
+
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/MGset_full/tms_pc/${dir_name}/MAGMA/top10.txt"
+  res_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based"
+  
+  # Check if the output file already exists
+  output_file="${res_dir}/${trait}.gsa.out"
+  if [ ! -f "$output_file" ]; then
+    echo "Running MAGMA for $trait in $dir_name..."
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based
+  new_res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/tms_pc/${dir_name}/MAGMA_100kb_based"
+    /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $new_res_dir/${trait}
+  else
+    echo "Output file $output_file already exists. Skipping..."
+  fi
+done
+
+```
+
+
+vi ts_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=ts_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc_tms_ts_consist"
+metrics_dirs=("det.esw_s" "TDEP" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker" "ep.esw_s") #"cepo_norm" 
+
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q5514/MGset_full/ts_pc/${dir_name}/MAGMA/top10.txt"
+  res_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/ts_pc/${dir_name}/MAGMA_100kb_based"
+  
+  # Check if the output file already exists
+  output_file="${res_dir}/${trait}.gsa.out"
+  if [ ! -f "$output_file" ]; then
+    echo "Running MAGMA for $trait in $dir_name..."
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/ts_pc/${dir_name}/MAGMA_100kb_based
+  new_res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ts_pc/${dir_name}/MAGMA_100kb_based"
+    /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $new_res_dir/${trait}
+  else
+    echo "Output file $output_file already exists. Skipping..."
+  fi
+done
+
+```
+
+vi 2019_Smillie_normal_cellxgene_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=18
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=2019_Smillie_normal_cellxgene_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc"
+metrics_dirs=("esmu" "ges.esw_s" "nsi.esw_s" "sclinker") #"TDEP" "cepo_norm" "det.esw_s" "ep.esw_s" 
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q2120/biLDSC/${dir_name}/processed/ctd_2019_Smillie_normal_cellxgene/MAGMA/top10.txt"
+  mkdir -p /QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene/${dir_name}/MAGMA_100kb_based
+  res_dir="/QRISdata/Q3999/tmp/Benchmark_association/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene/${dir_name}/MAGMA_100kb_based"
+  
+  # Check if the output file already exists
+  output_file="${res_dir}/${trait}.gsa.out"
+  if [ ! -f "$output_file" ]; then
+    echo "Running MAGMA for $trait in $dir_name..."
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene/${dir_name}/MAGMA_100kb_based
+  new_res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene/${dir_name}/MAGMA_100kb_based"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $new_res_dir/${trait}
+  else
+    echo "Output file $output_file already exists. Skipping..."
+  fi
+done
+
+
+```
+
+cd /home/uqali4/scripts
+vi 2019_Smillie_normal_cellxgene_pc_magma_geneset_benchmark_100kb.sh
+```{bash}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=10G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=ctd_2019_Smillie_normal_cellxgene_pc_magma_geneset_benchmark_100kb
+#SBATCH --error=slurm_%A_%a.error
+#SBATCH --output=slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array=1-39
+
+i=$SLURM_ARRAY_TASK_ID
+
+TASKFILE="/QRISdata/Q5729/job_list.txt"
+trait=$(sed -n "${i}p" $TASKFILE)
+trait=$(echo "$trait" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+echo "Trimmed Trait: '$trait'"
+echo ${i}
+trait_magma_dir="/scratch/project/genetic_data_analysis/uqali4/MAGMA_10kb_UKB20k_56778genes_pc"
+metrics_dirs=("TDEP" "cepo_norm" "det.esw_s" "ep.esw_s" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker") #"TDEP" "cepo_norm" "det.esw_s" "ep.esw_s" "esmu" 
+for dir_name in "${metrics_dirs[@]}"; do
+  cell_type="/QRISdata/Q2120/biLDSC/${dir_name}/processed/ctd_2019_Smillie_normal_cellxgene_pc/MAGMA/top10.txt"
+  mkdir -p /scratch/user/uqali4/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene_pc/${dir_name}/MAGMA_100kb_based
+  new_res_dir="/scratch/user/uqali4/geneset_res/PCgenes_background/ctd_2019_Smillie_normal_cellxgene_pc/${dir_name}/MAGMA_100kb_based"
+  /scratch/project/genetic_data_analysis/uqali4/software/magma --gene-results $trait_magma_dir/magma.${trait}.genes.raw --set-annot $cell_type --out $new_res_dir/${trait}
+done
+
+
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,405 @@
+
+
+# all human atlas results based on different methods:
+```{r}
+
+filtered_data_human_scdrs <- scDRS_atlas_pair %>% 
+  filter(Dataset=="Human",Strategy=="mBAT-combo window 10kb",assoc_mcp < 0.05) %>% 
+  filter(!Property=="Resultant") %>% 
+  select(CT_fig,Phenotype,assoc_mcp,Strategy,Property,Dataset) %>% 
+  dplyr::rename(Method=Strategy,P=assoc_mcp)
+filtered_data_human_scdrs$Method[filtered_data_human_scdrs$Method == "mBAT-combo window 10kb"] <- "scDRS mBAT-combo"
+
+filtered_data_human_ldsc <- LDSC_atlas %>% filter(Dataset=="Human", Metrics%in%c("CELLECT-DET_s","Cepo"), Annotation=="Continuous", P < 0.05) %>%
+  filter(!Property=="Resultant") %>% 
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset) %>%
+  dplyr::rename(Method=Metrics)
+filtered_data_human_ldsc$Method[filtered_data_human_ldsc$Method == "CELLECT-DET_s"] <- "continuous-LDSC CELLECT-DET_s"
+filtered_data_human_ldsc$Method[filtered_data_human_ldsc$Method == "Cepo"] <- "continuous-LDSC Cepo"
+
+filtered_data_human_MG <- MGset_atlas %>%filter(Dataset=="Human", Metrics=="Cepo", Annotation=="Binary-one-side", P < 0.05) %>%
+  filter(!Property=="Resultant") %>% 
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset) %>%
+  dplyr::rename(Method=Metrics)
+filtered_data_human_MG$Method[filtered_data_human_MG$Method == "Cepo"] <- "binary-MAGMA-gene-set Cepo"
+
+filtered_data_human=rbind(filtered_data_human_scdrs,filtered_data_human_ldsc,filtered_data_human_MG)
+filtered_data_human$Dataset[filtered_data_human$Dataset == "Human"] <- "Human Atlas based"
+
+
+summary_sig <- filtered_data_human %>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  group_by(Property, Method) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Property, values_from = Count, values_fill = 0)
+
+print(summary_sig)
+
+Main_01 = ggplot(filtered_data_human, aes(x = Method, fill=factor(Property))) +
+  geom_bar(position = "dodge") +
+  facet_grid(.~Dataset)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts",
+    fill = "Property"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set2") +
+   geom_hline(yintercept = 29*0.05, linetype="dotted",color = "red", size=0.5)+
+   geom_hline(yintercept = 29, linetype="dotted",color = "red", size=0.5)
+Main_01
+
+```
+
+# by Default seting, Comparing Count, Atlas
+```{r}
+
+filtered_data_human_ldsc1 <- LDSC_atlas %>% filter(Dataset=="Human", Annotation=="Continuous",P < 0.05) %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc1$Metrics[filtered_data_human_ldsc1$Metrics == "Cepo"] <- "Cepo - continous"
+
+
+filtered_data_human_ldsc2 <- LDSC_atlas %>% filter(Dataset=="Human", Annotation=="Binary",P < 0.05) %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc2$Metrics[filtered_data_human_ldsc2$Metrics == "Cepo"] <- "Cepo - binary"
+
+filtered_data_human_MG1 <- MGset_atlas %>% filter(Dataset=="Human", Annotation=="Continuous-one-side",P < 0.05) %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG1$Metrics[filtered_data_human_MG1$Metrics == "Cepo"] <- "Cepo - continous"
+
+filtered_data_human_MG2 <- MGset_atlas %>% filter(Dataset=="Human", Annotation=="Binary-one-side",P < 0.05) %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG2$Metrics[filtered_data_human_MG2$Metrics == "Cepo"] <- "Cepo - binary"
+
+
+filtered_data_human=rbind(filtered_data_human_ldsc1,filtered_data_human_ldsc2,filtered_data_human_MG2,filtered_data_human_MG1)
+filtered_data_human$Dataset[filtered_data_human$Dataset == "Human"] <- "Human Atlas based"
+
+
+Main_01 = ggplot(filtered_data_human, aes(x = Metrics, fill=factor(Strategy))) +
+  geom_bar(position = "dodge") +
+  facet_grid(Property~Dataset)+
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts",
+    fill = "Method"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Set1") +
+   geom_hline(yintercept = 29*0.05, linetype="dotted",color = "red", size=0.5)
+Main_01
+
+```
+
+# by Default seting, Comparing P-values, Atlas
+```{r}
+
+filtered_data_human_ldsc1 <- LDSC_atlas %>% filter(Dataset=="Human", Annotation=="Continuous") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset,P) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc1$Metrics[filtered_data_human_ldsc1$Metrics == "Cepo"] <- "Cepo - continous"
+
+
+filtered_data_human_ldsc2 <- LDSC_atlas %>% filter(Dataset=="Human", Annotation=="Binary") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset,P) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc2$Metrics[filtered_data_human_ldsc2$Metrics == "Cepo"] <- "Cepo - binary"
+
+filtered_data_human_MG1 <- MGset_atlas %>% filter(Dataset=="Human", Annotation=="Continuous-one-side") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset,P) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG1$Metrics[filtered_data_human_MG1$Metrics == "Cepo"] <- "Cepo - continous"
+
+filtered_data_human_MG2 <- MGset_atlas %>% filter(Dataset=="Human", Annotation=="Binary-one-side") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,Dataset,P) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG2$Metrics[filtered_data_human_MG2$Metrics == "Cepo"] <- "Cepo - binary"
+
+
+filtered_data_human=rbind(filtered_data_human_ldsc1,filtered_data_human_ldsc2,filtered_data_human_MG2,filtered_data_human_MG1) %>%dplyr::rename(organ=Dataset)
+#filtered_data_human$Dataset[filtered_data_human$Dataset == "Human"] <- "Human Atlas based"
+filtered_data_human$Dataset_type="Human Atlas based protein coding genes"
+
+```
+
+
+# by Default seting, Comparing P-values, Single organ,Baseline=="v1.1",
+```{r}
+
+filtered_data_human_ldsc1 <- LDSC_organ %>% filter(Annotation=="Continuous", gene_group=="PCgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc1$Metrics[filtered_data_human_ldsc1$Metrics == "Cepo"] <- "Cepo - continous"
+
+
+filtered_data_human_ldsc2 <- LDSC_organ %>% filter(Annotation=="Binary", gene_group=="PCgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc2$Metrics[filtered_data_human_ldsc2$Metrics == "Cepo"] <- "Cepo - binary"
+
+filtered_data_human_MG1 <- MGset_organ %>% filter(Annotation=="Continuous-one-side",gene_group=="PCgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG1$Metrics[filtered_data_human_MG1$Metrics == "Cepo"] <- "Cepo - continous"
+
+filtered_data_human_MG2 <- MGset_organ %>% filter(Annotation=="Binary-one-side",gene_group=="PCgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG2$Metrics[filtered_data_human_MG2$Metrics == "Cepo"] <- "Cepo - binary"
+
+
+filtered_data_human_organ1=rbind(filtered_data_human_ldsc1,filtered_data_human_ldsc2,filtered_data_human_MG2,filtered_data_human_MG1)
+filtered_data_human_organ1$Dataset_type="Human single organ + protein coding genes"
+
+
+
+```
+
+
+
+
+
+# by Default seting, Comparing P-values, Single organ,Baseline=="v1.1",
+```{r}
+
+filtered_data_human_ldsc1 <- LDSC_organ %>% filter(Annotation=="Continuous", gene_group=="allgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc1$Metrics[filtered_data_human_ldsc1$Metrics == "Cepo"] <- "Cepo - continous"
+
+
+filtered_data_human_ldsc2 <- LDSC_organ %>% filter(Annotation=="Binary", gene_group=="allgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="LDSC")
+filtered_data_human_ldsc2$Metrics[filtered_data_human_ldsc2$Metrics == "Cepo"] <- "Cepo - binary"
+
+filtered_data_human_MG1 <- MGset_organ %>% filter(Annotation=="Continuous-one-side",gene_group=="allgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(!Metrics=="TDEP") %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG1$Metrics[filtered_data_human_MG1$Metrics == "Cepo"] <- "Cepo - continous"
+
+filtered_data_human_MG2 <- MGset_organ %>% filter(Annotation=="Binary-one-side",gene_group=="allgene") %>%
+  filter(!Property=="Resultant") %>% 
+  filter(Metrics%in%c("TDEP","Cepo")) %>%
+  select(CT_fig,Phenotype,P,Metrics,Property,organ,P) %>% mutate(Strategy="MAGMA")
+filtered_data_human_MG2$Metrics[filtered_data_human_MG2$Metrics == "Cepo"] <- "Cepo - binary"
+
+
+filtered_data_human_organ2=rbind(filtered_data_human_ldsc1,filtered_data_human_ldsc2,filtered_data_human_MG2,filtered_data_human_MG1)
+filtered_data_human_organ2$Dataset_type="Human single organ + data expressing all genes"
+
+
+
+comb=rbind(filtered_data_human,filtered_data_human_organ1,filtered_data_human_organ2)
+comb$Metrics[comb$Metrics == "TDEP"] <- "EP"
+
+# Specify the desired order for the Metrics
+desired_order <- c("CELLECT-DET_s", "CELLECT-EP_s", "CELLECT-GES_s", 
+                   "CELLECT-NSI_s", "CELLECT-ESμ", "EP", 
+                   "sclinker", "Cepo - continous", "Cepo - binary")
+
+# Convert the Metrics column to a factor with the specified order
+comb$Metrics <- factor(comb$Metrics, levels = desired_order)
+
+# Check if the ordering has been applied
+unique(comb$Metrics)
+
+comb$Dataset_type <- factor(comb$Dataset_type, levels = c("Human Atlas based protein coding genes","Human single organ + protein coding genes","Human single organ + data expressing all genes"))
+
+```
+
+
+
+
+```{r}
+Main_022 = ggplot(comb, aes(x = Metrics, y = -log10(P), fill = factor(Strategy))) +  
+    geom_violin(color = NA) +  # Removes the black outline of the violin:color = NA
+    stat_summary(fun = mean, geom = "point", shape = 20, size = 1, color = "black", position = position_dodge(width = 0.9)) +  
+    facet_grid(Property ~ Dataset_type, scale = "free_y") +   
+    labs(
+        title = "",
+        x = "Method",
+        y = "-log10(P)",
+        fill = "Method"
+    ) +  
+    theme_minimal() +  
+    theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 14),
+        strip.text = element_text(color = "black", size = 12, face = "bold"),
+        panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid")
+    ) +  
+    xlab("") +  
+    scale_fill_brewer(palette = "Set1") +  
+    geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)
+
+Main_022
+
+ggplot(comb, aes(x = Metrics, y = -log10(P), fill = factor(Strategy))) +  
+    geom_violin(color = "black") +  # Set the color of the violin's outline to blue
+    stat_summary(fun = mean, geom = "point", shape = 20, size = 1.5, color = "black", position = position_dodge(width = 0.9)) +  
+    facet_wrap(. ~ Dataset_type + Property, scales = "free_y", nrow = 3) +   
+    labs(
+        title = "",
+        x = "Method",
+        y = "-log10(P)",
+        fill = "Method"
+    ) +  
+    theme_minimal() +  
+    theme(
+        axis.text.x = element_text(size = 11,face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 11),
+        strip.text = element_text(color = "black", size = 11),
+        panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid")
+    ) +  
+    xlab("") +  
+    scale_fill_brewer(palette = "Set1") +  
+    geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)
+
+
+ggplot(comb%>%filter(Property=="Causal"), aes(x = Metrics, y = -log10(P), fill = factor(Strategy))) +  
+    geom_violin(color = "black") +  # Set the color of the violin's outline to blue
+    stat_summary(fun = mean, geom = "point", shape = 20, size = 1.5, color = "black", position = position_dodge(width = 0.9)) +  
+    facet_wrap(. ~ Dataset_type + Property, scales = "free_y", nrow = 3) +   
+    labs(
+        title = "",
+        x = "Method",
+        y = "-log10(P)",
+        fill = "Method"
+    ) +  
+    theme_minimal() +  
+    theme(
+        axis.text.x = element_text(size = 11,face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 11),
+        strip.text = element_text(color = "black", size = 11),
+        panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid")
+    ) +  
+    xlab("") +  
+    scale_fill_brewer(palette = "Set1") +  
+    geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)
+
+ggplot(comb, 
+       aes(x = Metrics, y = -log10(P), fill = factor(Strategy))) +  
+    geom_boxplot(color = "black", position = position_dodge(width = 0.9)) +  # Box plot
+    stat_summary(fun = mean, geom = "point", shape = 20, size = 1, color = "black", position = position_dodge(width = 0.9)) +  
+    facet_wrap(. ~ Dataset_type + Property, scale = "free_y", nrow=3) +   
+    labs(
+        title = "",
+        x = "Method",
+        y = "-log10(P)",
+        fill = "Method"
+    ) +  
+    theme_minimal() +  
+    theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 14),
+        strip.text = element_text(color = "black", size = 12, face = "bold"),
+        panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid")
+    ) +  
+    xlab("") +  
+    scale_fill_brewer(palette = "Set1") +  
+    geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)
+
+
+```
+
+```{r}
+# Filter data based on P < 0.05
+filtered_data <- comb %>% filter(P < 0.05)  
+
+Main_01 = ggplot(filtered_data, aes(x = Metrics, fill = factor(Strategy))) +  
+  geom_bar(position = "dodge") +  
+  facet_wrap(. ~ Dataset_type + Property, scales = "free_y", nrow = 3) +   
+  labs(
+    title = "Counts of the pairs with P < 0.05",
+    x = "Method",
+    y = "Counts"
+  ) + 
+  theme_minimal() +  
+  theme(
+    axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+    text = element_text(size = 12),
+    strip.text = element_text(color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid")
+  ) +  
+  xlab("") +  
+  scale_fill_brewer(palette = "Set1") +  
+  
+  # Add hline only for specific conditions
+  geom_hline(data = filtered_data %>% 
+               filter(Property == "Control" & Dataset_type == "Human Atlas based protein coding genes"), 
+             aes(yintercept = 29 * 0.05), linetype = "dotted", color = "red", size = 0.5) +  # hline for Human Atlas, Control
+  
+  geom_hline(data = filtered_data %>% 
+               filter(Property == "Control" & Dataset_type != "Human Atlas based protein coding genes"), 
+             aes(yintercept = 34 * 0.05), linetype = "dotted", color = "red", size = 0.5)  # hline for Control, non-Human Atlas
+
+Main_01
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

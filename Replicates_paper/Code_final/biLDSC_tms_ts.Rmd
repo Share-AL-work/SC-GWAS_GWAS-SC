@@ -1,0 +1,581 @@
+nsi.esw_s: keratinocyte, specificity all being 0;
+sclinker: 3596 genes with specificity value = 1; /QRISdata/Q5514/Binary_baseline1.1/tms_pc/sclinker/LDSC_top10/Bed/keratinocyte.bed
+
+# bi-LDSC for TMS and TS
+
+# Check my CELLECT input files for all metrics:
+```{bash}
+#!/bin/bash
+cd /scratch/project/genetic_data_analysis/uqali4/benchmark/cellex_out/
+# Loop through all .csv.gz files matching the pattern ts_pc.*.csv.gz
+for file in ts_pc.*.csv.gz; do
+    echo "File: $file"
+    
+    # Use zcat to decompress and head to show the first 10 lines (including the header)
+    zcat "$file" | head -n 5
+    
+    echo "----------------------------------------"
+done
+
+
+#!/bin/bash
+
+# Loop through all .csv.gz files matching the pattern ts_pc.*.csv.gz
+for file in ts_pc.*.csv.gz; do
+    echo "File: $file"
+    
+    # Check if the file is in gzip format
+    if file "$file" | grep -q 'compressed'; then
+        # If it's a compressed file, use zcat and head
+        zcat "$file" | head -n 2
+    else
+        # If it's not compressed, use cat and head
+        cat "$file" | head -n 2
+    fi
+    
+    echo "----------------------------------------"
+done
+
+```
+
+
+# 01. Cepo
+# Original TS based Cepo results:~/Project_PhD/Integrate_GWAS+scRNA/TS_TMS_pc_1to1/Scripts/07_Cepo.Rmd
+# Generate for CELLECT: /scratch/project/genetic_data_analysis/uqali4/cellex_out/ts_pc.cepo_norm.csv
+
+# 02.sclinker and other metrics
+# Original ~/Manuscripts/Benchmark/0405_CT_tms+ts.Rmd
+# Generate for CELLECT: /scratch/project/genetic_data_analysis/uqali4/cellex_out/ts_pc.sclinker.csv
+
+# Extract target CT based CELLECT input:
+# TS
+```{r}
+
+library(data.table)
+library(dplyr)
+
+# Define the list of metrics
+metrics <- c("cepo_norm", "det.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker", "ep.esw_s", "TDEP")
+
+# Define file paths
+input_dir <- "/scratch/project/genetic_data_analysis/uqali4/benchmark/cellex_out/"
+output_dir <- "/scratch/project/genetic_data_analysis/uqali4/cellex_out/"
+aim_ct_file <- "/QRISdata/Q5729/ts_target_ct3.txt"
+
+# Read aim_ct (target columns)
+aim_ct <- fread(aim_ct_file, header = FALSE)$V1
+
+# Loop through each metric and apply the logic
+for (metric in metrics) {
+  # Construct input and output file paths
+  input_file <- paste0(input_dir, "ts_pc.", metric, ".csv.gz")
+  output_file <- paste0(output_dir, "ts_target_pc.", metric, ".csv")
+  
+  # Read the input file
+  combined_dt <- fread(input_file)
+  names(combined_dt)[1]="gene"
+  
+  # Select "gene" and columns in aim_ct
+  dt_save <- combined_dt %>% select("gene", all_of(aim_ct))
+  
+  # Write the output file
+  write.table(dt_save, file = output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+  
+  # Print a message indicating completion
+  cat("Processed:", metric, "\n")
+}
+
+
+```
+
+# TMS
+```{r}
+
+library(data.table)
+library(dplyr)
+
+# Define the list of metrics
+metrics <- c("cepo_norm", "det.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker", "ep.esw_s", "TDEP")
+
+# Define file paths
+input_dir <- "/scratch/project/genetic_data_analysis/uqali4/benchmark/cellex_out/"
+output_dir <- "/scratch/project/genetic_data_analysis/uqali4/cellex_out/"
+#aim_ct_file <- "/QRISdata/Q5729/tms_target_ct4.txt"
+aim_ct_file <- "/home/uqali4/tms_target_ct4.txt"
+# Read aim_ct (target columns)
+aim_ct <- fread(aim_ct_file, header = FALSE)$V1
+
+# Loop through each metric and apply the logic
+for (metric in metrics) {
+  # Construct input and output file paths
+  input_file <- paste0(input_dir, "tms_pc.", metric, ".csv.gz")
+  output_file <- paste0(output_dir, "tms_target_pc.", metric, ".csv")
+  
+  # Read the input file
+  combined_dt <- fread(input_file)
+  names(combined_dt)[1]="gene"
+  
+  # Select "gene" and columns in aim_ct
+  dt_save <- combined_dt %>% select("gene", all_of(aim_ct))
+  
+  # Write the output file
+  write.table(dt_save, file = output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+  
+  # Print a message indicating completion
+  cat("Processed:", metric, "\n")
+}
+
+
+```
+
+
+
+# 1.1.1. Generate Bed for each metrics in PC genes version for all metrics for tms
+# output: /QRISdata/Q5514/Binary_baseline1.1/tms_pc/
+```{r}
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(reshape2)
+
+# All genes expressed by FBM
+gene_list=fread("/QRISdata/Q5059/data/ts/TMS_ortholog_with_TS_minCell20_pcgene_list.csv")
+names(gene_list)="Gene"
+# 100 kb defined as below:
+gene_coordinates <- 
+  read_tsv("/scratch/project/genetic_data_analysis/uqali4/geneMatrix.56778genes.tsv",
+           col_names = TRUE,col_types = 'cciicc') %>%
+  mutate(start=ifelse(start-100000<0,0,start-100000),end=end+100000) %>%
+  filter(gene_type=="protein_coding")%>%
+  filter(Gene%in%c(gene_list$Gene))%>%
+  select(chr,start,end,Gene) %>% 
+  rename(ENTREZ="Gene") %>% 
+  mutate(chr=paste0("chr",chr))
+
+#MHC_region=data.table(chr="chr6",
+#                      start=27000000,
+#                      end=32000000,
+#                      MHC="MHC_region",
+#                      key = c("chr", "start", "end"))
+
+#Check_MHC=foverlaps(gene_coordinates, MHC_region, type="within")
+#MHC_gene=Check_MHC%>%filter(MHC=="MHC_region")
+#unique(MHC_gene$chr)
+#excludeMHC_gene = gene_coordinates%>%filter(!Gene%in%c(MHC_gene$Gene)) #19277 genes
+
+write_group  = function(df,Cell_type) {
+  df <- select(df,Cell_type,chr,start,end,gene)
+  dir.create(paste0("LDSC_top10/Bed"), showWarnings = FALSE,recursive = TRUE)
+  write_tsv(df[-1],paste0("LDSC_top10/Bed/",make.names(unique(df[1])),".bed"),col_names = F)
+return(df)
+}
+
+ldsc_bedfile <- function(d,Cell_type){
+  d_spe <- d %>% group_by(Cell_type) %>% top_n(.,n_genes_to_keep,specificity) 
+  d_spe %>% do(write_group(.,Cell_type))
+}
+
+
+magma_top <- function(d, Cell_type, percent) {
+    n_genes_to_keep <- (n_genes * percent) %>% round()
+    d_spe <- d %>% group_by(!!sym(Cell_type)) %>% top_n(., n_genes_to_keep, specificity)
+    topNum <- 100 * percent
+    d_spe %>% do(write_group_magma(., Cell_type, topNum))
+  }
+  
+write_group_magma <- function(df, Cell_type, topNum) {
+    df <- select(df, Cell_type, gene)
+    df_name <- make.names(unique(df[[1]]))
+    colnames(df)[2] <- df_name  
+    dir.create("MAGMA/", showWarnings = FALSE)
+    select(df, 2) %>% t() %>% as.data.frame() %>% rownames_to_column("Cat") %>%
+      write_tsv(paste0("MAGMA/top", topNum, ".txt"), append = TRUE)
+    return(df)
+}
+  
+#ct = fread("/QRISdata/Q5729/tms_target_ct4.txt",h=F)
+ct = fread("/home/uqali4/tms_target_ct4.txt",h=F)
+cell_type=ct$V1
+#cell_type="keratinocyte"
+files=c("cepo_norm","sclinker","det.esw_s","ep.esw_s","esmu","ges.esw_s","nsi.esw_s","TDEP")#
+
+for(f in files){
+  dt=fread(paste0("/scratch/project/genetic_data_analysis/uqali4/cellex_out/tms_target_pc.",f,".csv"))
+  print(f)
+  #print(names(dt))
+  names(dt)[1]="gene"
+  dt_aim = dt%>%select("gene",cell_type)
+  names(gene_coordinates)=c("chr","start","end","gene")
+  dt.exist=inner_join(dt_aim,gene_coordinates) 
+  #names(excludeMHC_gene)=c("chr","start","end","gene")
+  #dt.exist=inner_join(dt_aim,excludeMHC_gene)
+  n_genes <- length(unique(dt.exist$gene))
+  n_genes_to_keep <- (n_genes * 0.1) %>% round() 
+  dt.melt = melt(dt.exist, id.vars = c("gene","chr","start","end"),variable.name = "Cell_type",value.name = "specificity")
+  dt.melt = dt.melt[,c(1,5,6,2,3,4)]
+  dt.melt$Cell_type=as.character(dt.melt$Cell_type) ###############THIS is important steps to make write function works.
+  dir.create(paste0("/QRISdata/Q5514/Binary_baseline1.1/tms_pc/",f), showWarnings = FALSE,recursive = TRUE)
+  setwd(paste0("/QRISdata/Q5514/Binary_baseline1.1/tms_pc/",f))
+  dt.melt %>% ldsc_bedfile("Cell_type")
+  #dt.melt %>% magma_top("Cell_type", 0.1)
+}
+
+
+
+```
+
+
+# 1.1.2. Generate Bed for each metrics in PC genes version for all metrics for ts
+# output: /QRISdata/Q5514/Binary_baseline1.1/ts_pc/
+```{r}
+
+
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(reshape2)
+
+# All genes expressed by FBM
+gene_list=fread("/QRISdata/Q5059/data/ts/TMS_ortholog_with_TS_minCell20_pcgene_list.csv")
+names(gene_list)="Gene"
+# 100 kb defined as below:
+gene_coordinates <- 
+  read_tsv("/scratch/project/genetic_data_analysis/uqali4/geneMatrix.56778genes.tsv",
+           col_names = TRUE,col_types = 'cciicc') %>%
+  mutate(start=ifelse(start-100000<0,0,start-100000),end=end+100000) %>%
+  filter(gene_type=="protein_coding")%>%
+  filter(Gene%in%c(gene_list$Gene))%>%
+  select(chr,start,end,Gene) %>% 
+  rename(ENTREZ="Gene") %>% 
+  mutate(chr=paste0("chr",chr))
+
+#MHC_region=data.table(chr="chr6",
+#                      start=27000000,
+#                      end=32000000,
+#                      MHC="MHC_region",
+#                      key = c("chr", "start", "end"))
+
+#Check_MHC=foverlaps(gene_coordinates, MHC_region, type="within")
+#MHC_gene=Check_MHC%>%filter(MHC=="MHC_region")
+#unique(MHC_gene$chr)
+#excludeMHC_gene = gene_coordinates%>%filter(!Gene%in%c(MHC_gene$Gene)) #19277 genes
+
+write_group  = function(df,Cell_type) {
+  df <- select(df,Cell_type,chr,start,end,gene)
+  dir.create(paste0("LDSC_top10/Bed"), showWarnings = FALSE,recursive = TRUE)
+  write_tsv(df[-1],paste0("LDSC_top10/Bed/",make.names(unique(df[1])),".bed"),col_names = F)
+return(df)
+}
+
+ldsc_bedfile <- function(d,Cell_type){
+  d_spe <- d %>% group_by(Cell_type) %>% top_n(.,n_genes_to_keep,specificity) 
+  d_spe %>% do(write_group(.,Cell_type))
+}
+
+
+magma_top <- function(d, Cell_type, percent) {
+    n_genes_to_keep <- (n_genes * percent) %>% round()
+    d_spe <- d %>% group_by(!!sym(Cell_type)) %>% top_n(., n_genes_to_keep, specificity)
+    topNum <- 100 * percent
+    d_spe %>% do(write_group_magma(., Cell_type, topNum))
+  }
+  
+write_group_magma <- function(df, Cell_type, topNum) {
+    df <- select(df, Cell_type, gene)
+    df_name <- make.names(unique(df[[1]]))
+    colnames(df)[2] <- df_name  
+    dir.create("MAGMA/", showWarnings = FALSE)
+    select(df, 2) %>% t() %>% as.data.frame() %>% rownames_to_column("Cat") %>%
+      write_tsv(paste0("MAGMA/top", topNum, ".txt"), append = TRUE)
+    return(df)
+}
+  
+ct = fread("/QRISdata/Q5729/ts_target_ct3.txt",h=F)
+cell_type=ct$V1
+
+files=c("cepo_norm","sclinker","det.esw_s","ep.esw_s","esmu","ges.esw_s","nsi.esw_s","TDEP")
+
+for(f in files){
+  dt=fread(paste0("/scratch/project/genetic_data_analysis/uqali4/cellex_out/ts_target_pc.",f,".csv"))
+  print(f)
+  print(names(dt))
+  names(dt)[1]="gene"
+  dt_aim = dt%>%select("gene",cell_type)
+  names(gene_coordinates)=c("chr","start","end","gene")
+  dt.exist=inner_join(dt_aim,gene_coordinates) 
+  #names(excludeMHC_gene)=c("chr","start","end","gene")
+  #dt.exist=inner_join(dt_aim,excludeMHC_gene)
+  n_genes <- length(unique(dt.exist$gene))
+  n_genes_to_keep <- (n_genes * 0.1) %>% round() 
+  dt.melt = melt(dt.exist, id.vars = c("gene","chr","start","end"),variable.name = "Cell_type",value.name = "specificity")
+  dt.melt = dt.melt[,c(1,5,6,2,3,4)]
+  dt.melt$Cell_type=as.character(dt.melt$Cell_type) ###############THIS is important steps to make write function works.
+  dir.create(paste0("/QRISdata/Q5514/Binary_baseline1.1/ts_pc/",f), showWarnings = FALSE,recursive = TRUE)
+  setwd(paste0("/QRISdata/Q5514/Binary_baseline1.1/ts_pc/",f))
+  dt.melt %>% ldsc_bedfile("Cell_type")
+  #dt.melt %>% magma_top("Cell_type", 0.1)
+}
+
+
+
+```
+
+
+cp /QRISdata/Q5729/tms_target_ct4.txt /QRISdata/Q5729/tms_pc_target_ct_Sep18.txt
+cp /QRISdata/Q5729/ts_target_ct3.txt /QRISdata/Q5729/ts_pc_target_ct_Sep18.txt
+
+# 2.
+```{r}
+setwd("/Users/uqali4/tmp_sh")
+
+# Define prefixes and adjusted array ranges
+prefixes_array <- list(
+ # "ts_pc" = "1-1",
+  "tms_pc" = "1-1"
+)
+
+metrics <- c("cepo_norm", "det.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker", "ep.esw_s", "TDEP")
+
+# Template for the SLURM script with properly escaped dollar signs and curly braces
+template <- "#!/bin/bash
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH -c 20
+#SBATCH --mem=10GB
+#SBATCH --time=24:00:00
+#SBATCH --job-name={prefix}_{metric}_v1.1
+#SBATCH --error=/QRISdata/Q2120/jobs_sterr_stout/ldsc/slurm_%A_%a.error
+#SBATCH --output=/QRISdata/Q2120/jobs_sterr_stout/ldsc/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array={array_num}
+
+i=$SLURM_ARRAY_TASK_ID
+
+echo $SLURM_ARRAY_TASK_ID
+
+TASKFILE=\"/QRISdata/Q5729/{prefix}_target_ct_Sep18.txt\"
+f=$(awk -v i=\"$i\" 'NR==i {print $1}' \"$TASKFILE\")
+
+echo $f
+
+module load bedtools/2.30.0-gcc-10.3.0 #Bunya
+
+ldsc_path=/scratch/project/genetic_data_analysis/uqali4/software/ldsc
+path_name=\"/QRISdata/Q5514/Binary_baseline1.1/{prefix}/{metric}/LDSC_top10/\"
+all_snps=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_baseline_annot/1000genomes_phase3_SNPs.bed2\"
+all_annotations=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_baseline_annot\"
+bfile_path=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_plink\"
+
+hapmap_snps=\"/QRISdata/Q5729/Binary_baseline1.1/hm_snp.txt\"
+cd $path_name/Bed
+echo $f\".bed\"
+intersectBed -c -a $all_snps -b $f.bed > $f\".bed.1000genomes.intersect\"
+awk '{if($5!=0) print $4}' $f\".bed.1000genomes.intersect\" > $f\".bed.1000genomes.intersect.snp\"
+mkdir $f\".bed_cluster_dir\"
+rm $f\".bed.1000genomes.intersect\"
+cd $f\".bed_cluster_dir\"
+for j in $all_annotations/*.annot
+do
+echo $j
+file_name=`basename $j`
+perl /QRISdata/Q5059/CTE/EWCE/Siletti_2022_downsample/LDSC/fast_match2_minimal.pl ../$f\".bed.1000genomes.intersect.snp\" $f.bed $j > $file_name
+done
+
+gzip *annot
+
+source activate /scratch/project/genetic_data_analysis/uqali4/new_conda_env/envs/ldsc
+PATH=/scratch/project/genetic_data_analysis/uqali4/new_conda_env/envs/ldsc/bin:$PATH
+
+for chrom in {1..22}
+do
+  python2 $ldsc_path/ldsc.py --print-snps /QRISdata/Q5729/Binary_baseline1.1/hm_snp.txt --ld-wind-cm 1.0 --out baseline.$chrom --bfile /QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_plink/1000G.EUR.QC.$chrom --annot baseline.$chrom.annot.gz --l2
+done
+cd ..
+rm $f\".bed.1000genomes.intersect.snp\"
+
+sumstats=\"/QRISdata/Q5729/job_list.txt\"
+sumstats_dir=\"/QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format\"
+all_annotations=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_baseline\"
+weights=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_Phase3_weights_hm3_no_MHC/weights.hm3_noMHC.\"
+frq=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_Phase3_frq/1000G.EUR.QC.\"
+mkdir -p /QRISdata/Q2120/Binary_baseline1.1/{prefix}/{metric}/LDSC/top10/
+output=\"/QRISdata/Q2120/Binary_baseline1.1/{prefix}/{metric}/LDSC/top10\"
+for sumstats_file in `cat $sumstats | awk '{print $1}' | sort | uniq`
+do
+cd \"$path_name/Bed/$f.bed_cluster_dir\"
+python2 $ldsc_path/ldsc.py --h2 $sumstats_dir/$sumstats_file.sumstats.gz --ref-ld-chr $all_annotations/baseline.,baseline. --w-ld-chr $weights --overlap-annot --frqfile-chr $frq --print-coefficients --out ${output}/${sumstats_file}_${f}
+done
+"
+
+# Generate all scripts
+for (prefix in names(prefixes_array)) {
+  array_num <- prefixes_array[[prefix]]
+  for (metric in metrics) {
+    script_content <- gsub("\\{prefix\\}", prefix, template)
+    script_content <- gsub("\\{metric\\}", metric, script_content)
+    script_content <- gsub("\\{array_num\\}", array_num, script_content)
+    
+    script_filename <- paste0(prefix, "_", metric, "_v1.1.sh")
+    
+    # Write the script content to a file
+    writeLines(script_content, script_filename)
+    cat("Generated script:", script_filename, "\n")
+  }
+}
+
+
+
+```
+
+
+scp -r /Users/uqali4/tmp_sh uqali4@bunya.rcc.uq.edu.au:/home/uqali4/scripts/
+
+
+
+
+# submit a lot of jobs
+```{bash}
+#!/bin/bash
+
+# Define the directory containing the .sh files
+sh_directory="/home/uqali4/scripts/tmp_sh"  # Update this to the actual path where your .sh files are located
+
+# Loop through all .sh files in the directory
+for sh_file in "$sh_directory"/*.sh; do
+  # Submit the job using sbatch
+  sbatch "$sh_file"
+done
+
+
+
+```
+
+
+
+# need keratinocyte and Insomnia results
+mucus_secreting_cell
+# 2.
+```{r}
+setwd("/Users/uqali4/tmp_sh")
+
+# Define prefixes and adjusted array ranges
+prefixes_array <- list(
+  "tms_pc" = "1-1"
+)
+
+metrics <- c("cepo_norm")
+#, "det.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker", "ep.esw_s", "TDEP"
+# Template for the SLURM script with properly escaped dollar signs and curly braces
+template <- "#!/bin/bash
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH -c 20
+#SBATCH --mem=10GB
+#SBATCH --time=24:00:00
+#SBATCH --job-name={prefix}_{metric}_v1.1
+#SBATCH --error=/QRISdata/Q2120/jobs_sterr_stout/ldsc/slurm_%A_%a.error
+#SBATCH --output=/QRISdata/Q2120/jobs_sterr_stout/ldsc/slurm_%A_%a.out
+#SBATCH --partition=general
+#SBATCH --account=a_mcrae
+#SBATCH --array={array_num}
+
+i=$SLURM_ARRAY_TASK_ID
+
+echo $SLURM_ARRAY_TASK_ID
+
+TASKFILE=\"/home/uqali4/tms_target_ct4.txt\"
+f=$(awk -v i=\"$i\" 'NR==i {print $1}' \"$TASKFILE\")
+
+echo $f
+
+module load bedtools/2.30.0-gcc-10.3.0 #Bunya
+
+ldsc_path=/scratch/project/genetic_data_analysis/uqali4/software/ldsc
+path_name=\"/QRISdata/Q5514/Binary_baseline1.1/{prefix}/{metric}/LDSC_top10/\"
+all_snps=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_baseline_annot/1000genomes_phase3_SNPs.bed2\"
+all_annotations=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_baseline_annot\"
+bfile_path=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_plink\"
+
+hapmap_snps=\"/QRISdata/Q5729/Binary_baseline1.1/hm_snp.txt\"
+cd $path_name/Bed
+echo $f\".bed\"
+intersectBed -c -a $all_snps -b $f.bed > $f\".bed.1000genomes.intersect\"
+awk '{if($5!=0) print $4}' $f\".bed.1000genomes.intersect\" > $f\".bed.1000genomes.intersect.snp\"
+mkdir $f\".bed_cluster_dir\"
+rm $f\".bed.1000genomes.intersect\"
+cd $f\".bed_cluster_dir\"
+for j in $all_annotations/*.annot
+do
+echo $j
+file_name=`basename $j`
+perl /QRISdata/Q5059/CTE/EWCE/Siletti_2022_downsample/LDSC/fast_match2_minimal.pl ../$f\".bed.1000genomes.intersect.snp\" $f.bed $j > $file_name
+done
+
+gzip *annot
+
+source activate /scratch/project/genetic_data_analysis/uqali4/new_conda_env/envs/ldsc
+PATH=/scratch/project/genetic_data_analysis/uqali4/new_conda_env/envs/ldsc/bin:$PATH
+
+for chrom in {1..22}
+do
+  python2 $ldsc_path/ldsc.py --print-snps /QRISdata/Q5729/Binary_baseline1.1/hm_snp.txt --ld-wind-cm 1.0 --out baseline.$chrom --bfile /QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_plink/1000G.EUR.QC.$chrom --annot baseline.$chrom.annot.gz --l2
+done
+cd ..
+rm $f\".bed.1000genomes.intersect.snp\"
+
+sumstats=\"/QRISdata/Q5729/job_list.txt\"
+sumstats_dir=\"/QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format\"
+all_annotations=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_EUR_Phase3_baseline\"
+weights=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_Phase3_weights_hm3_no_MHC/weights.hm3_noMHC.\"
+frq=\"/QRISdata/Q5729/Binary_baseline1.1/1000G_Phase3_frq/1000G.EUR.QC.\"
+mkdir -p /QRISdata/Q2120/Binary_baseline1.1/{prefix}/{metric}/LDSC/top10/
+output=\"/QRISdata/Q2120/Binary_baseline1.1/{prefix}/{metric}/LDSC/top10\"
+for sumstats_file in `cat $sumstats | awk '{print $1}' | sort | uniq`
+do
+cd \"$path_name/Bed/$f.bed_cluster_dir\"
+python2 $ldsc_path/ldsc.py --h2 $sumstats_dir/$sumstats_file.sumstats.gz --ref-ld-chr $all_annotations/baseline.,baseline. --w-ld-chr $weights --overlap-annot --frqfile-chr $frq --print-coefficients --out ${output}/${sumstats_file}_${f}
+done
+"
+
+# Generate all scripts
+for (prefix in names(prefixes_array)) {
+  array_num <- prefixes_array[[prefix]]
+  for (metric in metrics) {
+    script_content <- gsub("\\{prefix\\}", prefix, template)
+    script_content <- gsub("\\{metric\\}", metric, script_content)
+    script_content <- gsub("\\{array_num\\}", array_num, script_content)
+    
+    script_filename <- paste0(prefix, "_", metric, "_v1.1.sh")
+    
+    # Write the script content to a file
+    writeLines(script_content, script_filename)
+    cat("Generated script:", script_filename, "\n")
+  }
+}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,533 @@
+
+# Test 1:  Calculate cell type specificity with one gene using random 1000 cells across the dataset [TS], replicate 100 times.
+
+# only keep cells with non-zero expression
+```{r}
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(data.table)
+library(dplyr)
+
+sce_TS <- readH5AD("/QRISdata/Q5059/data/ts/TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad") # 483,002 cells
+assay(sce_TS, "counts") <- assay(sce_TS)
+rowData(sce_TS)$gene <- rownames(rowData(sce_TS))
+
+# Define the gene of interest, I just choose randomly
+gene_of_interest <- "ENSG00000187634"  
+
+# Define the number of cells to sample and the number of replications
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells
+  sampled_cells <- sample(colnames(sce_TS), n_cells)
+  
+  # Extract, transpose, and convert the data to a dense matrix and then to a data frame
+  sampled_data <- as.matrix(t(assay(sce_TS, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce_TS)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce_TS))]
+  
+  # Check the number of non-zero expressions
+  sum(sampled_df$Expression > 0)
+
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  if (all(sampled_df$Expression == 0)) {
+    # If all Expression values are zero, create a placeholder with the cell_ontology_class
+    specificity_results[[i]] <- sampled_df %>%
+      select(cell_id, cell_ontology_class) %>%
+      mutate(specificity = NA)
+  } else {
+    # Filter out rows where Expression is zero
+    sampled_df <- sampled_df %>% filter(Expression > 0)
+    
+    # Scale to 1 million molecules within each cell type
+    sampled_df <- sampled_df %>%
+      group_by(cell_ontology_class) %>%
+      mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression))
+    
+    # Specificity Calculation
+    # Specificity is the proportion of total expression for the gene across cell types
+    sampled_df <- sampled_df %>%
+      ungroup() %>%
+      mutate(specificity = Expr_sum_mean / sum(Expr_sum_mean))
+    
+    # Store the result
+    specificity_results[[i]] <- sampled_df %>% select(cell_id, cell_ontology_class, specificity)
+  }
+}
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+
+# View the first few rows of the combined specificity results
+head(specificity_combined)
+
+
+
+```
+
+# Retain all cells, keep the possibility of specificity = 0 
+
+Specificity Calculation:
+specificity = Expr_sum_mean / sum(Expr_sum_mean)
+If Expr_sum_mean = 0 for a gene in a cell type, its contribution to specificity is also 0.
+If all cells for a gene in all cell types have Expr_sum_mean = 0, the entire sum(Expr_sum_mean) will be 0, leading to a division by zero, resulting in NaN.
+In cases where sum(Expr_sum_mean) = 0 (all-zero scenario), the specificity calculation for the gene would result in NaN.
+```{r}
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(data.table)
+library(dplyr)
+
+sce_TS <- readH5AD("/QRISdata/Q5059/data/ts/TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad") # 483,002 cells
+assay(sce_TS, "counts") <- assay(sce_TS)
+rowData(sce_TS)$gene <- rownames(rowData(sce_TS))
+
+# Define the gene of interest, I just choose randomly
+gene_of_interest <- "ENSG00000153563"  
+
+# Define the number of cells to sample and the number of replications
+n_cells <- 100000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells
+  sampled_cells <- sample(colnames(sce_TS), n_cells)
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce_TS, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce_TS)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce_TS))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE))
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  total_expr_sum <- sum(sampled_df$Expr_sum_mean, na.rm = TRUE)
+  sampled_df <- sampled_df %>%
+    ungroup() %>%
+    mutate(specificity = ifelse(total_expr_sum > 0, Expr_sum_mean / total_expr_sum, 0))
+  
+  # Store the result
+  specificity_results[[i]] <- sampled_df %>% select(cell_id, cell_ontology_class, specificity)
+}
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+
+head(specificity_combined)
+write.table(specificity_combined,"/QRISdata/Q2120/benchmark_stat/100k_cells_CD8Tmarkergene.specificity.100rep.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+# summary of cell counts per cell type:
+gene_expression_summary <- colData(sce_TS)$cell_ontology_class %>%
+  table() %>%
+  as.data.frame() %>%
+  rename(cell_type = ".", count = Freq)
+
+write.table(gene_expression_summary,"/QRISdata/Q2120/benchmark_stat/TabulaSapiens_pc_ortholog_with_TMS_minCell20_cell_type_cellnum.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+
+# Setting NA Values to Zero for specificity:
+specificity_combined$specificity[is.na(specificity_combined$specificity)] <- 0
+
+
+
+```
+
+ Replication cell_id                            cell_ontology_class specificity
+  <chr>       <chr>                              <fct>                     <dbl>
+1 1           ACGATCATCCGTGGGT_TSP14_SalivaryGl… fibroblast                    0
+2 1           CATCAAGAGACCAGCA_TSP14_Liver_NA_1… endothelial_cell_o…           0
+3 1           TGAGCATTCCATCTCG_TSP14_Fat_MAT_10… endothelial_cell              0
+4 1           CTATCTATCAAGAATG_TSP9_Pancreas_ex… endothelial_cell              0
+5 1           TCGAAGTAGCGGTAAC_TSP4_Mammary_NA_… luminal_epithelial…           0
+6 1           CATGCAAAGAATTCAG_TSP14_Prostate_N… luminal_cell_of_pr…           0
+>
+>
+>
+> tail(specificity_combined)
+# A tibble: 6 × 4
+  Replication cell_id                            cell_ontology_class specificity
+  <chr>       <chr>                              <fct>                     <dbl>
+1 100         TGTTTGTGTACGGCAA_TSP2_Lung_proxme… type_ii_pneumocyte          NaN
+2 100         GTGGCGTAGTTGTAGA_TSP7_Spleen_NA_1… nk_cell                     NaN
+3 100         TCTGCCAGTAGTATAG_TSP15_Eye_Cornea… retinal_blood_vess…         NaN
+4 100         TGCGGCAAGCAAACAT_TSP14_LymphNode_… cd8_positive_alpha…         NaN
+5 100         GAAGAATTCAAGGTGG_TSP14_Lung_NA_10… type_ii_pneumocyte          NaN
+6 100         GTGGAAGGTTCGGTTA_TSP2_Lung_proxme… club_cell                   NaN
+> dim(specificity_combined)
+[1] 100000      4
+> summary(specificity_combined$specificity)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's
+      0       0       0       0       0       0   87000
+Yes, this result can be normal for genes with sparse expression or high specificity.
+Consider exploring the gene’s overall expression pattern across cell types for further confirmation.
+Setting NAs to zero may simplify downstream analyses, depending on  objectives.
+
+> summary(gene_expression_summary$count)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+   30.0   195.5   647.0  2963.2  3270.5 35204.0
+ with most values for specificity being zero and NAs present, suggests that the gene of interest is sparsely expressed across the sampled cells, which is common in single-cell datasets where many genes are expressed in only a few cell types. Here’s an analysis of what this result means and why it’s reasonable under certain conditions.
+
+Interpreting the Output
+High Zero Count for Specificity:
+
+Explanation: Since specificity is calculated as a proportion of expression within each cell type, cells with zero expression for the gene naturally result in specificity values of zero. When a gene is expressed in very few cells or cell types, most entries for specificity will indeed be zero.
+Normalcy: This is expected if the gene is highly specific to certain cell types or has very low overall expression.
+High Number of NAs (87,000 out of 100,000 entries):
+
+Explanation: The NA values indicate replications where even after attempting to calculate specificity, the gene had no expression across all sampled cells in those instances.
+Resolution: If NAs are problematic for downstream analysis, you could set them to zero, as they represent cases of complete absence of expression in that subset.
+Checking Gene Expression Levels Across Cell Types:
+
+It may be helpful to examine the gene’s overall expression pattern across the dataset to confirm if it’s indeed sparsely expressed or highly cell-type specific.
+
+unique(colData(sce_TS)$organ_tissue)
+ [1] Liver           Trachea         Blood           Lymph_Node
+ [5] Salivary_Gland  Spleen          Tongue          Mammary
+ [9] Uterus          Eye             Fat             Skin
+[13] Bone_Marrow     Heart           Pancreas        Prostate
+[17] Muscle          Thymus          Bladder         Large_Intestine
+[21] Lung            Small_Intestine Vasculature     Kidney
+
+scp -r uqali4@bunya1.rcc.uq.edu.au:/QRISdata/Q2120/benchmark_stat/Rep1.txt /Users/uqali4/Manuscripts/Benchmark/Data_draw_fig/
+
+
+# Fig: Distribution of specificity for one gene:
+```{r}
+spec_one_gene_100rep=fread("/Users/uqali4/Manuscripts/Benchmark/Data_draw_fig/100k_cells_CD8Tmarkergene.specificity.100rep.txt") #Rep1.txt
+
+ggplot(spec_one_gene_100rep, aes(x = specificity))  + 
+  geom_density(alpha = 0.3) +
+  labs(title = "",
+       x = "Specificity",
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.title = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) +
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+    legend.position = "top"
+  )
+
+t=spec_one_gene_100rep%>%filter(cell_ontology_class=="cd8_positive_alpha_beta_t_cell")%>%mutate(organ="Atlas")
+
+ggplot(t, aes(x = specificity))  + 
+  geom_density(alpha = 0.3) +
+  labs(title = "",
+       x = "Specificity",
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.title = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) +
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+    legend.position = "top"
+  )
+
+
+
+
+```
+
+
+# Lung in TS
+```{r}
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(data.table)
+library(dplyr)
+
+sce_TS <- readH5AD("/QRISdata/Q5059/data/ts/TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad") 
+
+# Subset the SCE object to include only cells from "Lung"
+sce_TS <- sce_TS[, colData(sce_TS)$organ_tissue == "Lung"]
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000187634"  # Replace with your specific gene name
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the subset
+  sampled_cells <- sample(colnames(sce_TS), n_cells)
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce_TS, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)
+  sampled_df$cell_ontology_class <- colData(sce_TS)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce_TS))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE))
+  
+  # Specificity Calculation
+  total_expr_sum <- sum(sampled_df$Expr_sum_mean, na.rm = TRUE)
+  sampled_df <- sampled_df %>%
+    ungroup() %>%
+    mutate(specificity = ifelse(total_expr_sum > 0, Expr_sum_mean / total_expr_sum, 0))
+  
+  # Store the result
+  specificity_results[[i]] <- sampled_df %>% select(cell_id, cell_ontology_class, specificity)
+}
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+
+# View the first few rows of the combined specificity results
+head(specificity_combined)
+write.table(specificity_combined,"/QRISdata/Q2120/benchmark_stat/Atlas.lung.Rep1.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+
+
+
+```
+
+
+
+
+# Do it for lung
+```{r}
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(data.table)
+library(dplyr)
+
+sce <- readH5AD("/QRISdata/Q5729/Human_sc/processed/HLCA_core_healthy_LP_pc.h5ad") #  17419 genes, 290470 cells
+assay(sce, "counts") <- assay(sce)
+rowData(sce)$gene <- rownames(rowData(sce))
+length(unique(rowData(sce)$gene))
+head(rowData(sce)$gene)
+
+# Define the gene of interest, I just choose randomly
+gene_of_interest <- "ENSG00000153563"  
+
+# Define the number of cells to sample and the number of replications
+n_cells <- 100000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells
+  sampled_cells <- sample(colnames(sce), n_cells)
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_type <- colData(sce)$cell_type[match(sampled_df$cell_id, colnames(sce))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_type) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE))
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  total_expr_sum <- sum(sampled_df$Expr_sum_mean, na.rm = TRUE)
+  sampled_df <- sampled_df %>%
+    ungroup() %>%
+    mutate(specificity = ifelse(total_expr_sum > 0, Expr_sum_mean / total_expr_sum, 0))
+  
+  # Store the result
+  specificity_results[[i]] <- sampled_df %>% select(cell_id, cell_type, specificity)
+}
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+
+head(specificity_combined)
+
+write.table(specificity_combined,"/QRISdata/Q2120/benchmark_stat/Lung.HLCA.100k_cells_CD8Tmarkergene.specificity.100rep.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+# summary of cell counts per cell type:
+gene_expression_summary <- colData(sce)$cell_type %>%
+  table() %>%
+  as.data.frame() %>%
+  rename(cell_type = ".", count = Freq)
+
+write.table(gene_expression_summary,"/QRISdata/Q2120/benchmark_stat/Lung.HLCA.cell_type_cellnum.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+
+# Setting NA Values to Zero for specificity:
+specificity_combined$specificity[is.na(specificity_combined$specificity)] <- 0
+
+
+
+```
+> summary(specificity_combined$specificity)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's
+   0.00    0.00    0.00    0.00    0.00    0.05   89000
+   
+scp -r uqali4@bunya1.rcc.uq.edu.au:/QRISdata/Q2120/benchmark_stat/Lung.HLCA.Rep1.txt /Users/uqali4/Manuscripts/Benchmark/Data_draw_fig/   
+
+# Fig: Distribution of specificity for one gene with only one organ:Lung 
+```{r}
+spec_one_gene_100rep_lung=fread("/Users/uqali4/Manuscripts/Benchmark/Data_draw_fig/Lung.HLCA.100k_cells_CD8Tmarkergene.specificity.100rep.txt") #Lung.HLCA.Rep1.txt
+
+ggplot(t_lung, aes(x = specificity))  + 
+  geom_density(alpha = 0.3) +
+  labs(title = "",
+       x = "Specificity",
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.title = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) +
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+    legend.position = "top"
+  )
+
+t_lung=spec_one_gene_100rep_lung%>%filter(cell_type=="CD8-positive, alpha-beta T cell")%>%mutate(organ="Lung")
+
+
+t_atlas_lung=fread("/Users/uqali4/Manuscripts/Benchmark/Data_draw_fig/Atlas.lung.Rep1.txt")%>%filter(cell_ontology_class=="cd8_positive_alpha_beta_t_cell")%>%mutate(organ="Atlas-Lung")
+
+com_t = rbind(t%>%dplyr::rename(cell_type=cell_ontology_class),t_lung)#t_atlas_lung%>%dplyr::rename(cell_type=cell_ontology_class),
+
+ggplot(com_t, aes(x = specificity, fill = organ))  + 
+  geom_density(alpha = 0.3) +
+  facet_grid(.~organ)+
+  labs(title = "",
+       x = "Specificity for CD8",
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.title = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) +
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+    legend.position = "top"
+  )
+
+
+
+summary_data1 <- com_t %>%
+  group_by(organ) %>%
+  summarise(
+    mean_specificity = mean(specificity, na.rm = TRUE),
+    sd_specificity = sd(specificity, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Plot the data with error bars for standard deviation
+ggplot(summary_data1, aes(x = organ, y = mean_specificity, color = organ)) +
+  geom_point(size = 2, alpha = 0.7) +  # Scatter plot with points
+  geom_errorbar(aes(ymin = mean_specificity - sd_specificity, ymax = mean_specificity + sd_specificity), 
+                width = 0.2, alpha = 0.7) +  # Error bars for standard deviation
+  labs(
+    x = "Number of cell types within the data",
+    y = "Mean Specificity Score",
+    title = ""
+  ) +
+  theme_minimal() +
+  theme(
+    panel.background = element_blank(),
+    panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid"),
+    legend.position = "right",
+    strip.text = element_text(size = 10, face = "bold")
+  ) +
+  scale_color_brewer(palette = "Set1")
+```
+
+   
+# Test 2: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

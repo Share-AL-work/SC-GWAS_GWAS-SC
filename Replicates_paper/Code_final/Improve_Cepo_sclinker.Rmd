@@ -1,0 +1,1560 @@
+
+# Aim: To improve the performance of Cepo and sclinker in con-LDSC;
+# Approach: Rank normalization in CELLEX weight;
+
+# The key point of esw_star is to rescale the raw ESw values by ranking them within their column (i.e., cell types), ensuring that the most significant values (after considering their empirical p-values) are normalized to a value between 0 and 1.
+
+# Step 01: Find the statistics and P-values for 10 datasets:
+## 5/QRISdata/Q5059/sc_linker/healthy/new_organ/
+## /QRISdata/Q5059/sc_linker/healthy/PD/PC_only
+## 1/QRISdata/Q5059/sc_linker/healthy/PD/
+## 1/QRISdata/Q5059/sc_linker/healthy/CARE/all_genes
+## /QRISdata/Q5059/sc_linker/healthy/CARE/PC_only
+## 1/QRISdata/Q5729/Human_sc/processed/sclinker_op
+## 2/QRISdata/Q5059/sc_linker/modules_AL/healthy/benchmark
+
+## Make them to be in one directory:
+## mkdir /scratch/user/uqali4/sclinker_esw
+
+# Step 02: Run and generate input for running in CELELCT
+
+```{r}
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+# Set working directory
+setwd("/scratch/user/uqali4/sclinker_esw")
+
+# List all score and pval files
+score_files <- list.files(pattern = "_score.csv$")
+pval_files <- list.files(pattern = "_pval.csv$")
+
+# Define the esw_star function
+esw_star <- function(esw, pvals, verbose = FALSE) {
+  if (verbose) {
+    cat("Processing rank normalization ...\n")
+  }
+  
+  # Create mask matrices: significant p-values and non-zero ESw
+  pval_mask <- (pvals <= 0.05)  # Logical matrix where TRUE indicates significant p-values
+  binzero_mask <- (esw > 0)     # Logical matrix where TRUE indicates non-zero ESw values
+  
+  # Combine masks: TRUE where both conditions are met, and invert with !
+  mask <- !(pval_mask & binzero_mask)  # Mask: TRUE for non-significant or zero values
+  
+  # Apply the mask: set non-significant or zero ESw values to NA
+  esw_nominal <- esw
+  esw_nominal[mask] <- NA  # Keep only significant non-zero values
+  
+  # Rank the significant ESw values per column, set NA's to 0
+  esw_ranked <- apply(esw_nominal, 2, rank, na.last = "keep", ties.method = "average")
+  esw_ranked[is.na(esw_ranked)] <- 0  # Replace NA's with 0
+  
+  # Normalize by dividing by the maximum rank in each column to get values between 0 and 1
+  esw_ranknorm <- sweep(esw_ranked, 2, apply(esw_ranked, 2, max), FUN = "/")
+  
+  return(as.data.frame(esw_ranknorm))
+}
+
+# Process each pair of score and pval files
+for (score_file in score_files) {
+  # Generate corresponding pval file name
+  pval_file <- gsub("_score.csv$", "_pval.csv", score_file)
+  
+  # Check if the corresponding pval file exists
+  if (pval_file %in% pval_files) {
+    # Read in the score and pval data
+    dt_esw <- fread(score_file)
+    dt_P <- fread(pval_file)
+    
+    # Clean up column names
+    names(dt_esw)[1] <- "gene"
+    names(dt_esw) <- gsub("_L(type|refined|class|celltype)$", "", names(dt_esw))
+    names(dt_esw) <- gsub("[- ,]", "_", names(dt_esw))
+    
+    names(dt_P)[1] <- "gene"
+    names(dt_P) <- gsub("_L(type|refined|class|celltype)$", "", names(dt_P))
+    names(dt_P) <- gsub("[- ,]", "_", names(dt_P))
+    
+    # Extract gene names
+    gene_names <- dt_esw$gene
+    
+    # Remove the 'gene' column to keep only numeric values
+    esw_values <- dt_esw[ , -1, with = FALSE]
+    pval_values <- dt_P[ , -1, with = FALSE]
+    
+    # Call the esw_star function
+    esw_ranknorm <- esw_star(esw = esw_values, pvals = pval_values, verbose = TRUE)
+    
+    # Add back the gene names
+    esw_ranknorm <- cbind(gene = gene_names, esw_ranknorm)
+    
+    # Replace any remaining NA values with 0
+    esw_ranknorm[is.na(esw_ranknorm)] <- 0
+    
+    # Define the output directory and file name
+    output_dir <- "/scratch/user/uqali4/sclinker_esw/"
+    output_file <- paste0(output_dir, gsub("_pval.csv", "", basename(pval_file)), ".sclinker_s.csv")
+    
+    # Write the processed data to the output directory
+    write.table(esw_ranknorm, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+    
+    cat("Processed:", score_file, "and", pval_file, "\n")
+  } else {
+    cat("Warning: No matching pval file for", score_file, "\n")
+  }
+}
+
+```
+
+## Generate TS_target
+## wc -l /QRISdata/Q5729/ts_*.txt
+## /scratch/user/uqali4/TS_target_unique.txt
+
+## Generate TMS_target
+## wc -l /QRISdata/Q5729/tms_*.txt
+## /scratch/user/uqali4/TMS_target_unique.txt
+```{bash}
+# Define the source directory and the target file
+source_dir="/QRISdata/Q5729"
+target_file="/scratch/user/uqali4/TS_target.txt"
+
+# Use cat to concatenate all files matching the pattern and output to the target file
+cat ${source_dir}/ts_*.txt > ${target_file}
+
+echo "All contents from ts_*.txt have been copied to ${target_file}"
+
+##################################################################################################################################################################
+
+# Define the source directory and the target file
+source_dir="/QRISdata/Q5729"
+target_file="/scratch/user/uqali4/TMS_target.txt"
+
+# Use cat to concatenate all files matching the pattern and output to the target file
+cat ${source_dir}/tms_*.txt > ${target_file}
+
+echo "All contents from tms_*.txt have been copied to ${target_file}"
+
+##################################################################################################################################################################
+
+##################################################################################################################################################################
+
+
+# Define the path to the file
+file_path="/scratch/user/uqali4/TS_target.txt"
+
+# Use sort and uniq to find duplicated rows
+sort "${file_path}" | uniq -d > /scratch/user/uqali4/duplicated_rows.txt
+
+# Check if there are any duplicated rows
+if [ -s /scratch/user/uqali4/duplicated_rows.txt ]; then
+  echo "Duplicated rows found. They are saved in /scratch/user/uqali4/duplicated_rows.txt."
+else
+  echo "No duplicated rows found."
+fi
+
+##################################################################################################################################################################
+
+# Define the path to the file
+file_path="/scratch/user/uqali4/TMS_target.txt"
+
+# Use sort and uniq to find duplicated rows
+sort "${file_path}" | uniq -d > /scratch/user/uqali4/TMS_duplicated_rows.txt
+
+##################################################################################################################################################################
+
+##################################################################################################################################################################
+
+# Define the path to the input and output file
+input_file="/scratch/user/uqali4/TS_target.txt"
+output_file="/scratch/user/uqali4/TS_target_unique.txt"
+
+# Sort the file and use uniq to remove duplicates while keeping the first appearance
+sort "${input_file}" | uniq > "${output_file}"
+
+echo "Removed duplicates. The unique rows are saved in ${output_file}."
+
+##################################################################################################################################################################
+
+# Define the path to the input and output file
+input_file="/scratch/user/uqali4/TMS_target.txt"
+output_file="/scratch/user/uqali4/TMS_target_unique.txt"
+
+# Sort the file and use uniq to remove duplicates while keeping the first appearance
+sort "${input_file}" | uniq > "${output_file}"
+
+echo "Removed duplicates. The unique rows are saved in ${output_file}."
+
+
+```
+
+# Generate TS and TMS input seperately:
+```{r}
+
+library(data.table)
+library(dplyr)
+
+# Define input and output directories
+input_dir <- "/scratch/user/uqali4/sclinker_esw"
+output_dir <- "/scratch/user/uqali4/sclinker_esw/"
+
+# Get list of score and pval files
+score_files <- list.files(input_dir, pattern = "_score.csv$", full.names = TRUE)
+pval_files <- list.files(input_dir, pattern = "_pval.csv$", full.names = TRUE)
+
+# Define the esw_star function
+esw_star <- function(esw, pvals, verbose = FALSE) {
+  if (verbose) {
+    cat("Processing rank normalization ...\n")
+  }
+  
+  # Create mask matrices: significant p-values and non-zero ESw
+  pval_mask <- (pvals <= 0.05)
+  binzero_mask <- (esw > 0)
+  
+  # Combine masks: TRUE where both conditions are met, and invert with !
+  mask <- !(pval_mask & binzero_mask)
+  
+  # Apply the mask: set non-significant or zero ESw values to NA
+  esw_nominal <- esw
+  esw_nominal[mask] <- NA
+  
+  # Rank the significant ESw values per column, set NA's to 0
+  esw_ranked <- apply(esw_nominal, 2, rank, na.last = "keep", ties.method = "average")
+  esw_ranked[is.na(esw_ranked)] <- 0
+  
+  # Normalize by dividing by the maximum rank in each column to get values between 0 and 1
+  esw_ranknorm <- sweep(esw_ranked, 2, apply(esw_ranked, 2, max), FUN = "/")
+  
+  return(as.data.frame(esw_ranknorm))
+}
+
+# Function to process a specific score and pval pair based on dataset
+process_file_pair <- function(score_file, pval_file, target_file, output_prefix) {
+  # Read in the target cell types
+  CT_target <- fread(target_file, header = FALSE)
+  names(CT_target) <- "CellType"
+  
+  # Read in the score and pval data
+  dt_esw <- fread(score_file)
+  dt_P <- fread(pval_file)
+  
+  # Clean up column names
+  names(dt_esw)[1] <- "gene"
+  names(dt_esw) <- gsub("_L(type|refined|class|celltype)$", "", names(dt_esw))
+  names(dt_esw) <- gsub("[- ,]", "_", names(dt_esw))
+  
+  names(dt_P)[1] <- "gene"
+  names(dt_P) <- gsub("_L(type|refined|class|celltype)$", "", names(dt_P))
+  names(dt_P) <- gsub("[- ,]", "_", names(dt_P))
+  
+  # Extract gene names
+  gene_names <- dt_esw$gene
+  
+  # Remove the 'gene' column to keep only numeric values
+  esw_values <- dt_esw[, -1, with = FALSE]
+  pval_values <- dt_P[, -1, with = FALSE]
+  
+  # Call the esw_star function
+  esw_ranknorm <- esw_star(esw = esw_values, pvals = pval_values, verbose = TRUE)
+  
+  # Add back the gene names
+  esw_ranknorm <- cbind(gene = gene_names, esw_ranknorm)
+  
+  # Replace any remaining NA values with 0
+  esw_ranknorm[is.na(esw_ranknorm)] <- 0
+  
+  # Extract relevant cell types for the current dataset
+  esw_ranknorm_target <- esw_ranknorm %>% select(gene, any_of(CT_target$CellType))
+  
+  # Define the output file name based on the current dataset
+  output_file <- paste0(output_dir, output_prefix, ".sclinker_s.csv")
+  
+  # Write the processed data to the output directory
+  write.table(esw_ranknorm_target, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+  
+  cat("Processed:", score_file, "and", pval_file, "into", output_file, "\n")
+}
+
+# Process the tms_facs_1to1 dataset
+process_file_pair(
+  score_file = file.path(input_dir, "tms_facs_1to1_score.csv"),
+  pval_file = file.path(input_dir, "tms_facs_1to1_pval.csv"),
+  target_file = "/scratch/user/uqali4/TMS_target_unique.txt",
+  output_prefix = "tms_facs_1to1"
+)
+
+# Process the ts_pc_1to1 dataset
+process_file_pair(
+  score_file = file.path(input_dir, "ts_pc_1to1_score.csv"),
+  pval_file = file.path(input_dir, "ts_pc_1to1_pval.csv"),
+  target_file = "/scratch/user/uqali4/TS_target_unique.txt",
+  output_prefix = "ts_pc_1to1"
+)
+
+
+```
+
+
+# Step 03: Run CELLECT
+# Step 03.01: Generate .yml template file in local
+
+scp -r ~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/2019_Smillie_normal_cellxgene_sclinker_s_v1.1.yml uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/scripts/yml/
+scp -r ~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/2019_Smillie_normal_cellxgene_cepo_s_v1.1.yml uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/scripts/yml/
+
+# # Step 03.02: Generate directories
+```{bash}
+# Define the base path and the list of datasets
+base_path="/QRISdata/Q5514/CELLECT_baseline1.1/op_"
+datasets=(
+  "2019_Smillie_normal_cellxgene"
+  "2019_Smillie_normal_cellxgene_pc"
+  "Cheng_2018_Cell_Reports_updated"
+  "Cheng_2018_Cell_Reports_pc"
+  "FBM_Jardine_2021_Nature"
+  "FBM_Jardine_2021_Nature_pc"
+  "human_liver_atlas_Guilliams_2022_cell"
+  "human_liver_atlas_Guilliams_2022_cell_pc"
+  "tms_facs_1to1"
+  "ts_pc_1to1"
+  "Fasolino_2022_Nat_Metab_normal_only"
+  "Fasolino_2022_Nat_Metab_normal_only_pc"
+  "CARE_all_genes"
+  "CARE_pc_only"
+  "HCLA_LP_allgenes"
+  "HCLA_LP_pc"
+  "Kamath_allgenes"
+  "Kamath_pc_only"
+)
+
+# Loop through each dataset and create the corresponding directory
+for dataset in "${datasets[@]}"; do
+  dir="${base_path}${dataset}/Cepo_s"
+  mkdir -p "$dir"
+  echo "Created directory: $dir"
+done
+
+###########################################################################################################
+###########################################################################################################
+
+# Define the base path and the list of datasets
+base_path="/QRISdata/Q5514/CELLECT_baseline1.1/op_"
+datasets=(
+  "2019_Smillie_normal_cellxgene"
+  "2019_Smillie_normal_cellxgene_pc"
+  "Cheng_2018_Cell_Reports_updated"
+  "Cheng_2018_Cell_Reports_pc"
+  "FBM_Jardine_2021_Nature"
+  "FBM_Jardine_2021_Nature_pc"
+  "human_liver_atlas_Guilliams_2022_cell"
+  "human_liver_atlas_Guilliams_2022_cell_pc"
+  "TMS_pc_ortholog_with_TS_minCell20"
+  "TabulaSapiens_pc_ortholog_with_TMS_minCell20"
+  "Fasolino_2022_Nat_Metab_normal_only"
+  "Fasolino_2022_Nat_Metab_normal_only_pc"
+  "CARE_snRNA_Heart_expr_gene_withPos"
+  "CARE_snRNA_Heart_pc"
+  "HLCA_core_healthy_LP_expr_gene_withPos"
+  "HLCA_core_healthy_LP_pc"
+  "Kamath_2022_normal_expr_gene_withPos"
+  "Kamath_2022_normal_pc"
+)
+
+# Loop through each dataset and create the corresponding directory
+for dataset in "${datasets[@]}"; do
+  dir="${base_path}${dataset}/Cepo_s"
+  mkdir -p "$dir"
+  echo "Created directory: $dir"
+done
+```
+
+# # Step 03.03: Generate full datasets based .yml files for v1.1 sclinker
+```{r}
+library(stringr)
+
+# Read the template file
+template_path <- "/scratch/user/uqali4/scripts/yml/2019_Smillie_normal_cellxgene_sclinker_s_v1.1.yml"
+template_content <- readLines(template_path)
+
+# List of dataset names you want to replace in the template
+datasets <- c(
+  "2019_Smillie_normal_cellxgene",
+  "2019_Smillie_normal_cellxgene_pc",
+  "Cheng_2018_Cell_Reports_updated",
+  "Cheng_2018_Cell_Reports_pc",
+  "FBM_Jardine_2021_Nature",
+  "FBM_Jardine_2021_Nature_pc",
+  "human_liver_atlas_Guilliams_2022_cell",
+  "human_liver_atlas_Guilliams_2022_cell_pc",
+  "tms_facs_1to1",
+  "ts_pc_1to1",
+  "Fasolino_2022_Nat_Metab_normal_only",
+  "Fasolino_2022_Nat_Metab_normal_only_pc",
+  "CARE_all_genes",
+  "CARE_pc_only",
+  "HCLA_LP_allgenes",  
+  "HCLA_LP_pc",
+  "Kamath_allgenes",
+  "Kamath_pc_only"
+)
+
+# Define the output directory for the new .yml files
+output_dir <- "/scratch/user/uqali4/sclinker_yml/"
+
+# Ensure the output directory exists
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Loop through each dataset name and create a new .yml file
+for (dataset in datasets) {
+  # Replace the placeholder (e.g., "2019_Smillie_normal_cellxgene") with the dataset name
+  updated_content <- str_replace_all(template_content, "2019_Smillie_normal_cellxgene", dataset)
+  
+  # Define the output file name based on the dataset
+  output_file <- paste0(output_dir, dataset, "_sclinker_s_v1.1.yml")
+  
+  # Write the updated content to the new .yml file
+  writeLines(updated_content, output_file)
+  
+  # Print a message indicating that the file has been created
+  cat("Generated:", output_file, "\n")
+}
+
+```
+
+# Cepo_s
+```{r}
+library(stringr)
+
+# Read the template file
+template_path <- "/scratch/user/uqali4/scripts/yml/2019_Smillie_normal_cellxgene_cepo_s_v1.1.yml"
+template_content <- readLines(template_path)
+
+# List of dataset names you want to replace in the template
+datasets <- c(
+  "2019_Smillie_normal_cellxgene",
+  "2019_Smillie_normal_cellxgene_pc",
+  "Cheng_2018_Cell_Reports_updated",
+  "Cheng_2018_Cell_Reports_pc",
+  "FBM_Jardine_2021_Nature",
+  "FBM_Jardine_2021_Nature_pc",
+  "human_liver_atlas_Guilliams_2022_cell",
+  "human_liver_atlas_Guilliams_2022_cell_pc",
+  "TMS_pc_ortholog_with_TS_minCell20",
+  "TabulaSapiens_pc_ortholog_with_TMS_minCell20",
+  "Fasolino_2022_Nat_Metab_normal_only",
+  "Fasolino_2022_Nat_Metab_normal_only_pc",
+  "CARE_snRNA_Heart_expr_gene_withPos",
+  "CARE_snRNA_Heart_pc",
+  "HLCA_core_healthy_LP_expr_gene_withPos",
+  "HLCA_core_healthy_LP_pc",
+  "Kamath_2022_normal_expr_gene_withPos",
+  "Kamath_2022_normal_pc"
+)
+
+# Define the output directory for the new .yml files
+output_dir <- "/scratch/user/uqali4/Cepo_yml/"
+
+# Ensure the output directory exists
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Loop through each dataset name and create a new .yml file
+for (dataset in datasets) {
+  # Replace the placeholder (e.g., "2019_Smillie_normal_cellxgene") with the dataset name
+  updated_content <- str_replace_all(template_content, "2019_Smillie_normal_cellxgene", dataset)
+  
+  # Define the output file name based on the dataset
+  output_file <- paste0(output_dir, dataset, "_cepo_s_v1.1.yml")
+  
+  # Write the updated content to the new .yml file
+  writeLines(updated_content, output_file)
+  
+  # Print a message indicating that the file has been created
+  cat("Generated:", output_file, "\n")
+}
+
+```
+
+
+# # Step 03.04: Generate full datasets based .yml files for v2.1
+# generate_yml_v2.R
+```{r}
+# Load necessary library
+library(stringr)
+
+# Define input and output directories
+input_dir <- "/scratch/user/uqali4/sclinker_yml/"
+output_dir <- "/scratch/user/uqali4/sclinker_yml_v2.1/"
+
+# Create the output directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Get a list of all v1.1.yml files in the input directory
+yml_files_v1 <- list.files(input_dir, pattern = "v1.1.yml$", full.names = TRUE)
+
+# Loop through each v1.1.yml file and create a corresponding v2.1.yml file
+for (yml_file in yml_files_v1) {
+  # Read the content of the current yml file
+  yml_content <- readLines(yml_file)
+  
+  # Replace "CELLECT_baseline1.1" with "CELLECT_baseline2.1" in the content
+  yml_content_v2 <- str_replace_all(yml_content, "CELLECT_baseline1.1", "CELLECT_baseline2.1")
+  
+  # Generate the new filename by replacing "v1.1.yml" with "v2.1.yml"
+  yml_file_v2 <- gsub("v1.1.yml$", "v2.1.yml", yml_file)
+  
+  # Adjust the path to save it in the output directory
+  yml_file_v2 <- file.path(output_dir, basename(yml_file_v2))
+  
+  # Write the modified content to the new v2.1.yml file
+  writeLines(yml_content_v2, yml_file_v2)
+  
+  # Print a message indicating the file has been created
+  cat("Created:", yml_file_v2, "\n")
+}
+
+
+```
+
+# generate_yml_v2.R For Cepo_s
+```{r}
+# Load necessary library
+library(stringr)
+
+# Define input and output directories
+input_dir <- "/scratch/user/uqali4/Cepo_yml/"
+output_dir <- "/scratch/user/uqali4/Cepo_yml_v2.1/"
+
+# Create the output directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Get a list of all v1.1.yml files in the input directory
+yml_files_v1 <- list.files(input_dir, pattern = "v1.1.yml$", full.names = TRUE)
+
+# Loop through each v1.1.yml file and create a corresponding v2.1.yml file
+for (yml_file in yml_files_v1) {
+  # Read the content of the current yml file
+  yml_content <- readLines(yml_file)
+  
+  # Replace "CELLECT_baseline1.1" with "CELLECT_baseline2.1" in the content
+  yml_content_v2 <- str_replace_all(yml_content, "CELLECT_baseline1.1", "CELLECT_baseline2.1")
+  
+  # Generate the new filename by replacing "v1.1.yml" with "v2.1.yml"
+  yml_file_v2 <- gsub("v1.1.yml$", "v2.1.yml", yml_file)
+  
+  # Adjust the path to save it in the output directory
+  yml_file_v2 <- file.path(output_dir, basename(yml_file_v2))
+  
+  # Write the modified content to the new v2.1.yml file
+  writeLines(yml_content_v2, yml_file_v2)
+  
+  # Print a message indicating the file has been created
+  cat("Created:", yml_file_v2, "\n")
+}
+
+
+```
+
+
+# Step 04: Submit yml files
+```{bash}
+#!/bin/bash
+conda activate cellct_2
+mamba activate snakemake
+
+# Directories and paths
+dir="/scratch/project/genetic_data_analysis/uqali4/new_conda_env/CELLECT"
+config_dir_v1="/scratch/user/uqali4/sclinker_yml"
+config_dir_v2="/scratch/user/uqali4/sclinker_yml_v2.1"
+snakefile_v1="cellect-ldsc.snakefile"
+snakefile_v2="cellect-ldsc_AL.snakefile"
+workdir="/scratch/project/genetic_data_analysis/uqali4/CELLECT"
+
+# List of metrics
+metrics=("sclinker_s")
+
+# Function to submit Snakemake jobs for a given version, prefix, and metrics
+submit_jobs_for_prefix() {
+  local config_dir="$1"
+  local snakefile="$2"
+  local prefix="$3"
+  local version="$4"  # Add a parameter for version
+
+  # Loop over all metrics for the given prefix
+  for metric in "${metrics[@]}"; do
+    # Construct the correct pattern to find .yml files containing the prefix and metric
+    config_file="${config_dir}/${prefix}_${metric}_${version}.yml"
+    
+    # Check if the config file exists
+    if [ -f "$config_file" ]; then
+      # Extract the base name of the config file for output readability
+      base_name=$(basename "$config_file")
+      
+      # Print the current job being submitted
+      echo "Submitting job for config file: $base_name"
+      
+      # Submit the Snakemake job
+      snakemake --use-conda -j 20 -s "${dir}/${snakefile}" --configfile "${config_file}"
+    else
+      echo "No config file found for: ${prefix}_${metric}_${version}.yml"
+    fi
+  done
+}
+
+# Activate the environment and change to working directory
+cd $workdir
+
+# Submit jobs for each prefix separately with correct version
+
+
+# Submit jobs for version 1.1
+submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "tms_facs_1to1" "v1.1"
+
+# Submit jobs for version 2.1
+submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "tms_facs_1to1" "v2.1" 
+
+# Submit jobs for version 1.1
+submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "ts_pc_1to1" "v1.1"
+
+# Submit jobs for version 2.1
+submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "ts_pc_1to1" "v2.1"
+
+
+# Define the dataset prefixes
+datasets=(
+  "2019_Smillie_normal_cellxgene"
+  "2019_Smillie_normal_cellxgene_pc"
+  "Cheng_2018_Cell_Reports_updated"
+  "Cheng_2018_Cell_Reports_pc"
+  "FBM_Jardine_2021_Nature"
+  "FBM_Jardine_2021_Nature_pc"
+  "human_liver_atlas_Guilliams_2022_cell"
+  "human_liver_atlas_Guilliams_2022_cell_pc"
+  "Fasolino_2022_Nat_Metab_normal_only"
+  "Fasolino_2022_Nat_Metab_normal_only_pc"
+  "CARE_all_genes"
+  "CARE_pc_only"
+  "HCLA_LP_allgenes"
+  "HCLA_LP_pc"
+  "Kamath_allgenes"
+  "Kamath_pc_only"
+)
+
+
+datasets=(
+  "HCLA_LP_allgenes"
+  "HCLA_LP_pc"
+)
+
+# Loop through each dataset and submit jobs for both versions
+for prefix in "${datasets[@]}"; do
+  # Submit jobs for version 1.1
+  submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "$prefix" "v1.1"
+  
+  # Submit jobs for version 2.1
+  submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "$prefix" "v2.1"
+done
+
+
+
+```
+
+# Step 04: Submit yml files for Cepo
+```{bash}
+#!/bin/bash
+conda activate cellct_2
+mamba activate snakemake
+
+# Directories and paths
+dir="/scratch/project/genetic_data_analysis/uqali4/new_conda_env/CELLECT"
+config_dir_v1="/scratch/user/uqali4/Cepo_yml"
+config_dir_v2="/scratch/user/uqali4/Cepo_yml_v2.1"
+snakefile_v1="cellect-ldsc.snakefile"
+snakefile_v2="cellect-ldsc_AL.snakefile"
+workdir="/scratch/project/genetic_data_analysis/uqali4/CELLECT"
+
+# List of metrics
+metrics=("cepo_s")
+
+# Function to submit Snakemake jobs for a given version, prefix, and metrics
+submit_jobs_for_prefix() {
+  local config_dir="$1"
+  local snakefile="$2"
+  local prefix="$3"
+  local version="$4"  # Add a parameter for version
+
+  # Loop over all metrics for the given prefix
+  for metric in "${metrics[@]}"; do
+    # Construct the correct pattern to find .yml files containing the prefix and metric
+    config_file="${config_dir}/${prefix}_${metric}_${version}.yml"
+    
+    # Check if the config file exists
+    if [ -f "$config_file" ]; then
+      # Extract the base name of the config file for output readability
+      base_name=$(basename "$config_file")
+      
+      # Print the current job being submitted
+      echo "Submitting job for config file: $base_name"
+      
+      # Submit the Snakemake job
+      snakemake --use-conda -j 20 -s "${dir}/${snakefile}" --configfile "${config_file}"
+    else
+      echo "No config file found for: ${prefix}_${metric}_${version}.yml"
+    fi
+  done
+}
+
+# Activate the environment and change to working directory
+cd $workdir
+
+# Submit jobs for each prefix separately with correct version
+submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "CARE_snRNA_Heart_expr_gene_withPos" "v2.1"
+  
+# Submit jobs for version 1.1
+submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "TMS_pc_ortholog_with_TS_minCell20" "v1.1"
+
+# Submit jobs for version 2.1
+submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "TMS_pc_ortholog_with_TS_minCell20" "v2.1" 
+
+# Submit jobs for version 1.1
+submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "TabulaSapiens_pc_ortholog_with_TMS_minCell20" "v1.1"
+
+# Submit jobs for version 2.1
+submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "TabulaSapiens_pc_ortholog_with_TMS_minCell20" "v2.1"
+
+
+# Define the dataset prefixes
+datasets=(
+  "2019_Smillie_normal_cellxgene"
+  "2019_Smillie_normal_cellxgene_pc"
+  "Cheng_2018_Cell_Reports_updated"
+  "Cheng_2018_Cell_Reports_pc"
+  "FBM_Jardine_2021_Nature"
+  "FBM_Jardine_2021_Nature_pc"
+  "human_liver_atlas_Guilliams_2022_cell"
+  "human_liver_atlas_Guilliams_2022_cell_pc"
+  "Fasolino_2022_Nat_Metab_normal_only"
+  "Fasolino_2022_Nat_Metab_normal_only_pc"
+  "CARE_snRNA_Heart_expr_gene_withPos"
+  "CARE_snRNA_Heart_pc"
+  "HLCA_core_healthy_LP_expr_gene_withPos"
+  "HLCA_core_healthy_LP_pc"
+  "Kamath_2022_normal_expr_gene_withPos"
+  "Kamath_2022_normal_pc"
+)
+
+
+datasets=(
+  "CARE_snRNA_Heart_pc"
+)
+
+# Loop through each dataset and submit jobs for both versions
+for prefix in "${datasets[@]}"; do
+  # Submit jobs for version 1.1
+  submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "$prefix" "v1.1"
+  
+  # Submit jobs for version 2.1
+  submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "$prefix" "v2.1"
+done
+
+
+
+```
+
+
+
+## Delete below after finishing:
+## cd /scratch/project/genetic_data_analysis/uqali4/CELLECT/.snakemake
+## ls -la
+
+## /scratch/project/genetic_data_analysis/uqali4/CELLECT/.snakemake/metadata
+
+## /scratch/project/genetic_data_analysis/uqali4/CELLECT/.snakemake/incomplete
+
+```{bash}
+#!/bin/bash
+
+# Define the target directory
+target_dir="/scratch/project/genetic_data_analysis/uqali4/CELLECT/.snakemake/incomplete"
+
+# Find and delete files and directories modified before Sep 30th, 2023
+find "$target_dir" -type d -not -newermt "2024-09-30" -exec rm -rf {} \;
+find "$target_dir" -type f -not -newermt "2024-09-30" -exec rm -f {} \;
+
+
+# Explanation:
+# - `-type f` finds regular files.
+# - `-type d` finds directories.
+# - `-not -newermt "2023-10-01"` selects files or directories modified before Sep 30th, 2023.
+# - `-exec rm -f {}` deletes the found files.
+# - `-exec rm -rf {}` deletes the found directories and their contents.
+
+```
+
+ls /QRISdata/Q5514/CELLECT_baseline*.1/*/sclinker_s/CELLECT-LDSC/results/prioritization.csv
+ls /QRISdata/Q5514/CELLECT_baseline*.1/*/Cepo_s/CELLECT-LDSC/results/prioritization.csv
+
+
+# remove intermediate files generated by CELLECT
+```{bash}
+
+#!/bin/bash
+
+# Define the base path pattern for directories containing prioritization.csv
+base_path="/QRISdata/Q5514/CELLECT_baseline*.1/*/sclinker_s/CELLECT-LDSC"
+
+# Find and loop over each directory containing the prioritization.csv file
+for dir in $(find $base_path -type f -name "prioritization.csv" -exec dirname {} \;); do
+  echo "Processing directory: $dir"
+  
+  # Change into the parent directory of 'results'
+  cd "$dir/.." || continue
+  
+  # Remove the specified subdirectories if they exist
+  rm -r precomputation/ logs/ out/ 2>/dev/null
+  
+  echo "Removed subdirectories in $dir"
+done
+
+echo "Cleanup completed."
+
+#####################################################################
+
+#####################################################################
+
+#!/bin/bash
+
+# Define the base path pattern for directories containing prioritization.csv
+base_path="/QRISdata/Q5514/CELLECT_baseline*.1/*/Cepo_s/CELLECT-LDSC"
+
+# Find and loop over each directory containing the prioritization.csv file
+for dir in $(find $base_path -type f -name "prioritization.csv" -exec dirname {} \;); do
+  echo "Processing directory: $dir"
+  
+  # Change into the parent directory of 'results'
+  cd "$dir/.." || continue
+  
+  # Remove the specified subdirectories if they exist
+  rm -r precomputation/ logs/ out/ 2>/dev/null
+  
+  echo "Removed subdirectories in $dir"
+done
+
+echo "Cleanup completed."
+
+
+```
+
+
+# Single organ and atlas sclinker_s
+# Summarize and collect results
+```{r}
+library(dplyr)
+library(readr)
+library(tidyr)
+
+# Define the base paths for baseline1.1 (Q5514 and Q2120) and baseline2.1 (Q5514 and Q2120)
+base_paths <- list(
+  baseline1.1 = c("/QRISdata/Q5514/CELLECT_baseline1.1"),
+  baseline2.1 = c("/QRISdata/Q5514/CELLECT_baseline2.1")
+)
+
+# Define the file prefixes (datasets)
+file_prefixes <- c(
+  "tms_facs_1to1",
+  "ts_pc_1to1",
+  "2019_Smillie_normal_cellxgene",
+  "2019_Smillie_normal_cellxgene_pc",
+  "Cheng_2018_Cell_Reports_updated",
+  "Cheng_2018_Cell_Reports_pc",
+  "FBM_Jardine_2021_Nature",
+  "FBM_Jardine_2021_Nature_pc",
+  "human_liver_atlas_Guilliams_2022_cell",
+  "human_liver_atlas_Guilliams_2022_cell_pc",
+  "Fasolino_2022_Nat_Metab_normal_only",
+  "Fasolino_2022_Nat_Metab_normal_only_pc",
+  "CARE_all_genes",
+  "CARE_pc_only",
+  "HCLA_LP_allgenes",
+  "HCLA_LP_pc",
+  "Kamath_allgenes",
+  "Kamath_pc_only"
+)
+
+# Define the metrics with both underscores and dots
+metrics <- c("sclinker_s")
+
+# Function to read and annotate a CSV file
+read_and_annotate <- function(file_path, prefix, metric, baseline, status) {
+  read_csv(file_path) %>%
+    mutate(Dataset = prefix, Metrics = metric, Baseline = baseline, Status = status)
+}
+
+# Initialize an empty list to store data frames
+data_list <- list()
+
+# Function to check if a result exists in any of the provided base paths
+result_exists <- function(base_paths, prefix, metric) {
+  # Create both underscore and dot versions of the metric
+  metric_underscore <- gsub("\\.", "_", metric)  # Convert dots to underscores
+  metric_dot <- gsub("_", "\\.", metric)         # Convert underscores to dots
+  
+  for (base_path in base_paths) {
+    # Check both underscore and dot versions of the metric
+    file_path_underscore <- file.path(base_path, paste0("op_", prefix), metric_underscore, "CELLECT-LDSC/results/prioritization.csv")
+    file_path_dot <- file.path(base_path, paste0("op_", prefix), metric_dot, "CELLECT-LDSC/results/prioritization.csv")
+    
+    # Return the file path if it exists
+    if (file.exists(file_path_underscore)) {
+      return(list(exists = TRUE, file_path = file_path_underscore))
+    }
+    if (file.exists(file_path_dot)) {
+      return(list(exists = TRUE, file_path = file_path_dot))
+    }
+  }
+  return(list(exists = FALSE, file_path = NULL))
+}
+
+# Loop through each base path, prefix, and metric to read and annotate the data
+for (base_name in names(base_paths)) {
+  paths <- base_paths[[base_name]]
+  
+  # Determine the baseline version from the base_name
+  baseline <- ifelse(grepl("baseline1.1", base_name), "baseline1.1", "baseline2.1")
+  
+  for (prefix in file_prefixes) {
+    for (metric in metrics) {
+      # Check if the result exists in any of the directories for baseline1.1 or baseline2.1
+      check_result <- result_exists(paths, prefix, metric)
+      
+      if (check_result$exists) {
+        # If file exists, read and annotate with status "finished"
+        data_list[[length(data_list) + 1]] <- read_and_annotate(check_result$file_path, prefix, metric, baseline, "finished")
+      } else {
+        # If file does not exist, create a data frame indicating "unfinished"
+        data_list[[length(data_list) + 1]] <- data.frame(
+          Dataset = prefix,
+          Metrics = metric,
+          Baseline = baseline,
+          Status = "unfinished"
+        )
+      }
+    }
+  }
+}
+
+# Combine the data frames in the list into a single data frame
+final_data <- bind_rows(data_list)
+
+# View the combined final data
+head(final_data)
+write_csv(final_data, "/home/uqali4/sclinker_s_10data_merged_prioritization_data_with_status.csv")
+
+
+```
+
+scp -r uqali4@bunya.rcc.uq.edu.au:/home/uqali4/sclinker_s_10data_merged_prioritization_data_with_status.csv /Users/uqali4/Manuscripts/Benchmark/
+
+# Single organ and atlas Cepo_s
+# Summarize and collect results
+```{r}
+library(dplyr)
+library(readr)
+library(tidyr)
+
+# Define the base paths for baseline1.1 (Q5514 and Q2120) and baseline2.1 (Q5514 and Q2120)
+base_paths <- list(
+  baseline1.1 = c("/QRISdata/Q5514/CELLECT_baseline1.1"),
+  baseline2.1 = c("/QRISdata/Q5514/CELLECT_baseline2.1")
+)
+
+# Define the file prefixes (datasets)
+file_prefixes <- c(
+  "2019_Smillie_normal_cellxgene",
+  "2019_Smillie_normal_cellxgene_pc",
+  "Cheng_2018_Cell_Reports_updated",
+  "Cheng_2018_Cell_Reports_pc",
+  "FBM_Jardine_2021_Nature",
+  "FBM_Jardine_2021_Nature_pc",
+  "human_liver_atlas_Guilliams_2022_cell",
+  "human_liver_atlas_Guilliams_2022_cell_pc",
+  "TMS_pc_ortholog_with_TS_minCell20",
+  "TabulaSapiens_pc_ortholog_with_TMS_minCell20",
+  "Fasolino_2022_Nat_Metab_normal_only",
+  "Fasolino_2022_Nat_Metab_normal_only_pc",
+  "CARE_snRNA_Heart_expr_gene_withPos",
+  "CARE_snRNA_Heart_pc",
+  "HLCA_core_healthy_LP_expr_gene_withPos",
+  "HLCA_core_healthy_LP_pc",
+  "Kamath_2022_normal_expr_gene_withPos",
+  "Kamath_2022_normal_pc"
+)
+
+# Define the metrics with both underscores and dots
+metrics <- c("Cepo_s")
+
+# Function to read and annotate a CSV file
+read_and_annotate <- function(file_path, prefix, metric, baseline, status) {
+  read_csv(file_path) %>%
+    mutate(Dataset = prefix, Metrics = metric, Baseline = baseline, Status = status)
+}
+
+# Initialize an empty list to store data frames
+data_list <- list()
+
+# Function to check if a result exists in any of the provided base paths
+result_exists <- function(base_paths, prefix, metric) {
+  # Create both underscore and dot versions of the metric
+  metric_underscore <- gsub("\\.", "_", metric)  # Convert dots to underscores
+  metric_dot <- gsub("_", "\\.", metric)         # Convert underscores to dots
+  
+  for (base_path in base_paths) {
+    # Check both underscore and dot versions of the metric
+    file_path_underscore <- file.path(base_path, paste0("op_", prefix), metric_underscore, "CELLECT-LDSC/results/prioritization.csv")
+    file_path_dot <- file.path(base_path, paste0("op_", prefix), metric_dot, "CELLECT-LDSC/results/prioritization.csv")
+    
+    # Return the file path if it exists
+    if (file.exists(file_path_underscore)) {
+      return(list(exists = TRUE, file_path = file_path_underscore))
+    }
+    if (file.exists(file_path_dot)) {
+      return(list(exists = TRUE, file_path = file_path_dot))
+    }
+  }
+  return(list(exists = FALSE, file_path = NULL))
+}
+
+# Loop through each base path, prefix, and metric to read and annotate the data
+for (base_name in names(base_paths)) {
+  paths <- base_paths[[base_name]]
+  
+  # Determine the baseline version from the base_name
+  baseline <- ifelse(grepl("baseline1.1", base_name), "baseline1.1", "baseline2.1")
+  
+  for (prefix in file_prefixes) {
+    for (metric in metrics) {
+      # Check if the result exists in any of the directories for baseline1.1 or baseline2.1
+      check_result <- result_exists(paths, prefix, metric)
+      
+      if (check_result$exists) {
+        # If file exists, read and annotate with status "finished"
+        data_list[[length(data_list) + 1]] <- read_and_annotate(check_result$file_path, prefix, metric, baseline, "finished")
+      } else {
+        # If file does not exist, create a data frame indicating "unfinished"
+        data_list[[length(data_list) + 1]] <- data.frame(
+          Dataset = prefix,
+          Metrics = metric,
+          Baseline = baseline,
+          Status = "unfinished"
+        )
+      }
+    }
+  }
+}
+
+# Combine the data frames in the list into a single data frame
+final_data <- bind_rows(data_list)
+
+# View the combined final data
+head(final_data)
+
+write_csv(final_data, "/home/uqali4/cepo_s_10data_merged_prioritization_data_with_status.csv")
+
+
+```
+
+scp -r uqali4@bunya.rcc.uq.edu.au:/home/uqali4/cepo_s_10data_merged_prioritization_data_with_status.csv /Users/uqali4/Manuscripts/Benchmark/
+
+
+# Generate function of esw_star
+```{r}
+esw_star <- function(esw, pvals, verbose = FALSE) {
+  
+  if (verbose) {
+    cat("Processing rank normalization ...\n")
+  }
+  
+  # Create mask matrices: significant p-values and non-zero ESw
+  pval_mask <- (pvals <= 0.05)  # Logical matrix where TRUE indicates significant p-values
+  binzero_mask <- (esw > 0)     # Logical matrix where TRUE indicates non-zero ESw values
+  
+  # Combine masks: TRUE where both conditions are met, and invert with !
+  mask <- !(pval_mask & binzero_mask)  # Mask: TRUE for non-significant or zero values
+  
+  # Apply the mask: set non-significant or zero ESw values to NA
+  esw_nominal <- esw
+  esw_nominal[mask] <- NA  # Keep only significant non-zero values
+  
+  # Rank the significant ESw values per column, set NA's to 0
+  esw_ranked <- apply(esw_nominal, 2, rank, na.last = "keep", ties.method = "average")
+  esw_ranked[is.na(esw_ranked)] <- 0  # Replace NA's with 0
+  
+  # Normalize by dividing by the maximum rank in each column to get values between 0 and 1
+  esw_ranknorm <- sweep(esw_ranked, 2, apply(esw_ranked, 2, max), FUN = "/")
+  
+  return(as.data.frame(esw_ranknorm))
+}
+
+# Example usage:
+# Assuming ESw and pvals are matrices of the same dimensions
+# esw_star(ESw, pvals, verbose = TRUE)
+
+```
+
+# test with one data
+```{r}
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+setwd("/scratch/user/uqali4/sclinker_esw")
+dt_esw = fread("2019_Smillie_normal_cellxgene_pc_score.csv")
+dt_P = fread("2019_Smillie_normal_cellxgene_pc_pval.csv")
+
+names(dt_P)[1] = "gene"
+names(dt_P) <- gsub("_L(type|refined|class|celltype)$", "", names(dt_P))
+names(dt_P) <- gsub("[- ,]", "_", names(dt_P))
+
+names(dt_esw)[1] = "gene"
+names(dt_esw) <- gsub("_L(type|refined|class|celltype)$", "", names(dt_esw))
+names(dt_esw) <- gsub("[- ,]", "_", names(dt_esw))
+
+esw_star <- function(esw, pvals, verbose = FALSE) {
+  
+  if (verbose) {
+    cat("Processing rank normalization ...\n")
+  }
+  
+  # Create mask matrices: significant p-values and non-zero ESw
+  pval_mask <- (pvals <= 0.05)  # Logical matrix where TRUE indicates significant p-values
+  binzero_mask <- (esw > 0)     # Logical matrix where TRUE indicates non-zero ESw values
+  
+  # Combine masks: TRUE where both conditions are met, and invert with !
+  mask <- !(pval_mask & binzero_mask)  # Mask: TRUE for non-significant or zero values
+  
+  # Apply the mask: set non-significant or zero ESw values to NA
+  esw_nominal <- esw
+  esw_nominal[mask] <- NA  # Keep only significant non-zero values
+  
+  # Rank the significant ESw values per column, set NA's to 0
+  esw_ranked <- apply(esw_nominal, 2, rank, na.last = "keep", ties.method = "average")
+  esw_ranked[is.na(esw_ranked)] <- 0  # Replace NA's with 0
+  
+  # Normalize by dividing by the maximum rank in each column to get values between 0 and 1
+  esw_ranknorm <- sweep(esw_ranked, 2, apply(esw_ranked, 2, max), FUN = "/")
+  
+  return(as.data.frame(esw_ranknorm))
+}
+
+# Extract gene names
+gene_names <- dt_esw$gene
+
+# Remove the 'gene' column to keep only numeric values
+esw_values <- dt_esw[ , -1]
+pval_values <- dt_P[ , -1]
+
+# Call the esw_star function
+esw_ranknorm <- esw_star(esw = esw_values, pvals = pval_values, verbose = TRUE)
+
+# Add back the gene names
+esw_ranknorm <- cbind(gene = gene_names, esw_ranknorm)
+
+# Replace any remaining NA values with 0
+esw_ranknorm[is.na(esw_ranknorm)] <- 0
+
+output_dir = "/scratch/user/uqali4/sclinker_esw/"
+# Generate output file name 
+output_file <- paste0(output_dir, gsub("_pval.csv", "", basename("2019_Smillie_normal_cellxgene_pc_pval.csv")),".sclinker_s.csv")
+  
+# Write the processed data to the output directory
+write.table(esw_ranknorm, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+
+```
+
+# DET for ref
+```{r}
+# Compute Differential Expression T-statistic ES weights
+det_esw <- function(mean, variance, n_cells, verbose = FALSE) {
+  
+  if (verbose) {
+    cat("Computing DET ES weights...\n")
+  }
+  
+  # Fill NA values in variance with 0
+  variance[is.na(variance)] <- 0
+  
+  # Compute pooled standard deviation
+  sd_pooled <- sqrt(rowSums((n_cells - 1) * variance) / rowSums(n_cells - 1))
+  
+  # Initialize the result matrix
+  result <- matrix(0, nrow = nrow(mean), ncol = ncol(mean))
+  
+  # Loop through each column (cell type)
+  for (i in seq_len(ncol(mean))) {
+    
+    # X_1: Mean expression for the current cell type
+    X_1 <- mean[, i]
+    
+    # X_others: Mean expression for other cell types (weighted by cell numbers)
+    mean_others <- mean[, -i]
+    n_cells_other <- n_cells[, -i]
+    X_others <- rowSums(mean_others * n_cells_other) / rowSums(n_cells)
+    
+    # n_1: Number of cells in the current cell type
+    n_1 <- n_cells[, i]
+    
+    # n_other: Total number of cells in other cell types
+    n_other <- rowSums(n_cells_other)
+    
+    # Compute scaling factor for the pooled standard deviation
+    sd_pooled_factor <- sqrt((1/n_1) + (1/n_other))
+    
+    # Compute T-statistic for the current cell type
+    tstat <- (X_1 - X_others) / (sd_pooled * sd_pooled_factor)
+    
+    # Save the result in the corresponding column
+    result[, i] <- tstat
+  }
+  
+  return(result)
+}
+
+```
+
+```{r}
+# Set working directory
+setwd("/scratch/user/uqali4/Cepo_esw/")
+
+# List all .rda files in the directory
+rda_files <- list.files(pattern = "\\.rda$")
+
+# Loop over each file, load it, and display the object name
+for (file in rda_files) {
+  # Load the .rda file
+  full_dt <- load(file)
+  
+  # Display the file name
+  cat("Loaded file:", file, "\n")
+  
+  # Display the name of the object loaded
+  cat("Loaded object(s):", full_dt, "\n")
+}
+
+```
+
+# test with one data
+```{r}
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+setwd("/scratch/user/uqali4/Cepo_esw/")
+full_dt=load("cepo_norm_Cheng_2018_Cell_Reports_pc.rda")
+
+# Prepare and save cepo metrics
+cepo_metrics <- as.data.frame(Cepo_op$stats)
+cepo_metrics$gene <- rownames(cepo_metrics)
+cepo_metrics <- cepo_metrics %>% relocate(gene)
+rownames(cepo_metrics) <- NULL
+cepo_P=as.data.frame(Cepo_op$pvalues)
+cepo_P$gene <- rownames(cepo_P)
+#moving the gene column to the first position.
+cepo_P=cepo_P%>%relocate(gene) 
+rownames(cepo_P) <- NULL
+  
+names(cepo_P) <- gsub("[- ,]", "_", names(cepo_P))
+names(cepo_metrics) <- gsub("[- ,]", "_", names(cepo_metrics))
+
+esw_star <- function(esw, pvals, verbose = FALSE) {
+  
+  if (verbose) {
+    cat("Processing rank normalization ...\n")
+  }
+  
+  # Create mask matrices: significant p-values and non-zero ESw
+  pval_mask <- (pvals <= 0.05)  # Logical matrix where TRUE indicates significant p-values
+  binzero_mask <- (esw > 0)     # Logical matrix where TRUE indicates non-zero ESw values
+  
+  # Combine masks: TRUE where both conditions are met, and invert with !
+  mask <- !(pval_mask & binzero_mask)  # Mask: TRUE for non-significant or zero values
+  
+  # Apply the mask: set non-significant or zero ESw values to NA
+  esw_nominal <- esw
+  esw_nominal[mask] <- NA  # Keep only significant non-zero values
+  
+  # Rank the significant ESw values per column, set NA's to 0
+  esw_ranked <- apply(esw_nominal, 2, rank, na.last = "keep", ties.method = "average")
+  esw_ranked[is.na(esw_ranked)] <- 0  # Replace NA's with 0
+  
+  # Normalize by dividing by the maximum rank in each column to get values between 0 and 1
+  esw_ranknorm <- sweep(esw_ranked, 2, apply(esw_ranked, 2, max), FUN = "/")
+  
+  return(as.data.frame(esw_ranknorm))
+}
+
+# Extract gene names
+gene_names <- cepo_metrics$gene
+
+# Remove the 'gene' column to keep only numeric values
+esw_values <- cepo_metrics[ , -1]
+pval_values <- cepo_P[ , -1]
+
+# Call the esw_star function
+esw_ranknorm <- esw_star(esw = esw_values, pvals = pval_values, verbose = TRUE)
+
+# Add back the gene names
+esw_ranknorm <- cbind(gene = gene_names, esw_ranknorm)
+
+# Replace any remaining NA values with 0
+esw_ranknorm[is.na(esw_ranknorm)] <- 0
+
+output_dir = "/scratch/user/uqali4/Cepo_esw/"
+# Generate output file name 
+output_file <- paste0(output_dir, "Cheng_2018_Cell_Reports_pc.Cepo_s.csv")
+  
+# Write the processed data to the output directory
+write.table(esw_ranknorm, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+
+```
+
+# Generate Cepo.s for all data.
+```{r}
+# Load necessary libraries
+library(data.table)
+library(dplyr)
+library(tidyverse)
+
+# Set working directory
+setwd("/scratch/user/uqali4/Cepo_esw/")
+
+# List all .rda files in the directory
+rda_files <- list.files(pattern = "\\.rda$")
+
+# Define the esw_star function
+esw_star <- function(esw, pvals, verbose = FALSE) {
+  
+  if (verbose) {
+    cat("Processing rank normalization ...\n")
+  }
+  
+  # Create mask matrices: significant p-values and non-zero ESw
+  pval_mask <- (pvals <= 0.05)  # Logical matrix where TRUE indicates significant p-values
+  binzero_mask <- (esw > 0)     # Logical matrix where TRUE indicates non-zero ESw values
+  
+  # Combine masks: TRUE where both conditions are met, and invert with !
+  mask <- !(pval_mask & binzero_mask)  # Mask: TRUE for non-significant or zero values
+  
+  # Apply the mask: set non-significant or zero ESw values to NA
+  esw_nominal <- esw
+  esw_nominal[mask] <- NA  # Keep only significant non-zero values
+  
+  # Rank the significant ESw values per column, set NA's to 0
+  esw_ranked <- apply(esw_nominal, 2, rank, na.last = "keep", ties.method = "average")
+  esw_ranked[is.na(esw_ranked)] <- 0  # Replace NA's with 0
+  
+  # Normalize by dividing by the maximum rank in each column to get values between 0 and 1
+  esw_ranknorm <- sweep(esw_ranked, 2, apply(esw_ranked, 2, max), FUN = "/")
+  
+  return(as.data.frame(esw_ranknorm))
+}
+
+# Output directory
+output_dir = "/scratch/user/uqali4/Cepo_esw/"
+
+# Loop through each .rda file
+for (file in rda_files) {
+  # Load the .rda file
+  full_dt <- load(file)
+  
+  # Check if 'Cepo_op' exists in the loaded file
+  if (!exists("Cepo_op")) {
+    cat("Cepo_op not found in file:", file, "\n")
+    next
+  }
+  
+  # Prepare cepo metrics and p-values
+  cepo_metrics <- as.data.frame(Cepo_op$stats)
+  cepo_metrics$gene <- rownames(cepo_metrics)
+  cepo_metrics <- cepo_metrics %>% relocate(gene)
+  rownames(cepo_metrics) <- NULL
+  
+  cepo_P <- as.data.frame(Cepo_op$pvalues)
+  cepo_P$gene <- rownames(cepo_P)
+  cepo_P <- cepo_P %>% relocate(gene)
+  rownames(cepo_P) <- NULL
+  
+  # Clean column names
+  names(cepo_P) <- gsub("[- ,]", "_", names(cepo_P))
+  names(cepo_metrics) <- gsub("[- ,]", "_", names(cepo_metrics))
+  
+  # Extract gene names and numeric values
+  gene_names <- cepo_metrics$gene
+  esw_values <- cepo_metrics[, -1]
+  pval_values <- cepo_P[, -1]
+  
+  # Call the esw_star function to rank normalize
+  esw_ranknorm <- esw_star(esw = esw_values, pvals = pval_values, verbose = TRUE)
+  
+  # Add back gene names
+  esw_ranknorm <- cbind(gene = gene_names, esw_ranknorm)
+  
+  # Replace any remaining NA values with 0
+  esw_ranknorm[is.na(esw_ranknorm)] <- 0
+  
+  # Generate output file name based on input file
+  output_file <- paste0(output_dir, gsub("\\.rda$", ".Cepo_s.csv", file))
+  
+  # Write the processed data to the output directory
+  write.table(esw_ranknorm, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+  
+  cat("Processed and saved:", output_file, "\n")
+}
+
+```
+
+
+
+
+# Generate data for final figure:
+```{r}
+
+file_path <- "/Users/uqali4/Manuscripts/Benchmark_list.xlsx"
+Trait_dt <- read_excel(file_path, sheet = "Pairs-Trait")%>%select(Phenotype,file,conldsc_file)
+head(Trait_dt)
+
+cell_types_df <- fread("/Users/uqali4/Manuscripts/Benchmark/CT_fig_ditinct_datasets.txt") 
+
+
+sclinker_s_all_conLDSC <- fread("/Users/uqali4/Manuscripts/Benchmark/sclinker_s_10data_merged_prioritization_data_with_status.csv")
+
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "tms_facs_1to1"] <- "TMS_pc_ortholog_with_TS_minCell20"
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "ts_pc_1to1"] <- "TabulaSapiens_pc_ortholog_with_TMS_minCell20"
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "CARE_all_genes"] <- "CARE_snRNA_Heart_expr_gene_withPos"
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "CARE_pc_only"] <- "CARE_snRNA_Heart_pc"
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "HCLA_LP_allgenes"] <- "HLCA_core_healthy_LP_expr_gene_withPos"
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "HCLA_LP_pc"] <- "HLCA_core_healthy_LP_pc"
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "Kamath_allgenes"] <- "Kamath_2022_normal_expr_gene_withPos"
+sclinker_s_all_conLDSC$Dataset[sclinker_s_all_conLDSC$Dataset == "Kamath_pc_only"] <- "Kamath_2022_normal_pc"
+
+# Filter rows in 'annotation' containing specific strings
+filtered_annotations <- sclinker_s_all_conLDSC[grep("cd4|cd8|CD4|CD8", sclinker_s_all_conLDSC$annotation), ]
+#filtered_annotations%>%select(annotation,Dataset)%>%distinct()
+
+
+sclinker_s_all_conLDSC = sclinker_s_all_conLDSC %>%
+  mutate(Baseline = case_when(
+    Baseline == "baseline1.1" ~ "v1.1",
+    Baseline == "baseline2.1" ~ "v2.1",
+    TRUE ~ Baseline  # Keep the original value if it doesn't match the above
+  )) %>% dplyr::rename(conldsc_file=gwas)%>%
+  mutate(gene_group = ifelse(grepl("_pc$", Dataset) | 
+                             Dataset %in% c("TMS_pc_ortholog_with_TS_minCell20", 
+                                            "TabulaSapiens_pc_ortholog_with_TMS_minCell20"), 
+                             "PCgene", "allgene")) %>% 
+  dplyr::rename(Dataset_02=Dataset,CT_ldsc=annotation) %>% 
+  inner_join(cell_types_df) %>% 
+  select(!c("Dataset_02","Status")) %>%
+  inner_join(Trait_dt) %>% 
+  select(!c("file","conldsc_file","CT_ldsc","specificity_id"))
+
+
+
+#cepo_s_all_conLDSC <- fread("/Users/uqali4/Manuscripts/Benchmark/cepo_s_10data_merged_prioritization_data_with_status.csv") 
+#filtered_annotations_c <- cepo_s_all_conLDSC[grep("cd4|cd8|CD4|CD8", cepo_s_all_conLDSC$annotation), ]
+#filtered_annotations_c = filtered_annotations_c%>%filter(Dataset=="TabulaSapiens_pc_ortholog_with_TMS_minCell20")
+
+cepo_s_all_conLDSC <- fread("/Users/uqali4/Manuscripts/Benchmark/cepo_s_10data_merged_prioritization_data_with_status.csv") %>%
+  group_by(annotation, gwas, Baseline, Dataset) %>%
+  slice_min(order_by = pvalue, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(Baseline = case_when(
+    Baseline == "baseline1.1" ~ "v1.1",
+    Baseline == "baseline2.1" ~ "v2.1",
+    TRUE ~ Baseline  # Keep the original value if it doesn't match the above
+  )) %>% dplyr::rename(conldsc_file=gwas)%>%
+  mutate(gene_group = ifelse(grepl("_pc$", Dataset) | 
+                             Dataset %in% c("TMS_pc_ortholog_with_TS_minCell20", 
+                                            "TabulaSapiens_pc_ortholog_with_TMS_minCell20"), 
+                             "PCgene", "allgene")) %>% 
+  dplyr::rename(Dataset_02=Dataset,CT_ldsc=annotation) %>% 
+  inner_join(cell_types_df) %>% 
+  select(!c("Dataset_02","Status")) %>%
+  inner_join(Trait_dt) %>% 
+  select(!c("file","conldsc_file","CT_ldsc","specificity_id"))
+
+
+
+```
+
+
+# Code for check the duplicated rows in Cepo results.
+```{r}
+# Load necessary library
+library(dplyr)
+
+# Select relevant columns for comparison
+sclinker_subset <- sclinker_s_all_conLDSC %>% 
+  select(specificity_id, CT_ldsc, Metrics, Baseline, gene_group, Dataset, CT_fig, Phenotype) %>%distinct()
+
+cepo_subset <- cepo_s_all_conLDSC %>% 
+  select(specificity_id, CT_ldsc, Metrics, Baseline, gene_group, Dataset, CT_fig, Phenotype)%>%distinct()
+
+# Define the columns to check for similarity
+columns_to_match <- c("specificity_id", "CT_ldsc", "Metrics", "Baseline", "gene_group", "Dataset", "CT_fig", "Phenotype")
+
+# Group by the specified columns and filter rows with differing values in other columns
+differing_rows <- cepo_s_all_conLDSC %>%
+  group_by(across(all_of(columns_to_match))) %>%
+  filter(n() > 1 & (n_distinct(beta) > 1 | n_distinct(beta_se) > 1 | n_distinct(pvalue) > 1)) %>%
+  ungroup()
+
+# Display the number of differing rows found
+cat("Number of rows with the same values in specified columns but different in others:", nrow(differing_rows), "\n")
+
+# Display the first few rows of differing_rows
+head(differing_rows)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

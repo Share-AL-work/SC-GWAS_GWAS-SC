@@ -1,0 +1,294 @@
+
+
+scp -r /Users/uqali4/Manuscripts/Benchmark/CT_fig_ditinct_datasets.txt  uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/sclinker_s_Cepo_s_differences_in_headers.csv ~/Manuscripts/Benchmark/Results/
+
+
+# Check the differece in Cepo_s and sclinker_s based results since Cepo removed a lot of cell type because of Cepo forced:
+```{r}
+library(data.table)
+# Define the directory containing the CSV files
+input_dir <- "/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/"
+
+# Get a list of all the csv files in the directory
+file_list <- list.files(input_dir, pattern = ".csv$", full.names = TRUE)
+
+# Split the files into Cepo and sclinker files
+cepo_files <- file_list[grepl("Cepo_s.csv$", file_list)]
+sclinker_files <- file_list[grepl("sclinker_s.csv$", file_list)]
+
+# Initialize an empty data table to store results
+diff_columns_dt <- data.table(dataset = character(), cell_type = character(), metric = character())
+
+# Loop through each Cepo file and find its corresponding sclinker file
+for (i in seq_along(cepo_files)) {
+  cepo_file <- cepo_files[i]
+  sclinker_file <- sclinker_files[i]
+
+  # Extract dataset prefix from filename
+  dataset_prefix <- gsub(".Cepo_s.csv", "", basename(cepo_file))
+  
+  # Read only the header to get column names for both files
+  cepo <- fread(cepo_file)
+  cepo_header <- names(cepo)
+  sclinker <- fread(sclinker_file)
+  sclinker_header <- names(sclinker)
+  
+  # Find differences between the headers
+  cepo_only <- setdiff(cepo_header, sclinker_header)
+  sclinker_only <- setdiff(sclinker_header, cepo_header)
+  
+  # Collect the differences in a data table
+  if (length(cepo_only) > 0) {
+    diff_columns_dt <- rbind(diff_columns_dt, data.table(dataset = dataset_prefix, cell_type = cepo_only, metric = "Cepo only"))
+  }
+  if (length(sclinker_only) > 0) {
+    diff_columns_dt <- rbind(diff_columns_dt, data.table(dataset = dataset_prefix, cell_type = sclinker_only, metric = "sclinker only"))
+  }
+}
+
+# Save the resulting data table to a CSV file
+output_file <- file.path(input_dir, "sclinker_s_Cepo_s_differences_in_headers.csv")
+fwrite(diff_columns_dt, output_file, row.names = FALSE)
+
+
+
+```
+
+
+# Read in Marker genes for cell types.
+```{r}
+library(data.table)
+library(dplyr)
+library(readr)
+library(stringr)
+library(tidyr)
+
+# Load the cell types mapping file
+cell_types_df <- fread("/scratch/user/uqali4/CT_fig_ditinct_datasets.txt") %>%
+  filter(!(Dataset == "TS" & CT_fig == "ventricular myocyte"))
+
+# Function to extract dataset name, metrics, and gene_group from file name
+extract_info_from_filename <- function(filename) {
+  # Remove the full path
+  base_name <- basename(filename)
+  
+  # Extract gene group
+  gene_group <- ifelse(grepl("_pc", base_name), "PCgenes", "allgene")
+  
+  # Extract metrics and dataset name
+  parts_orig <- str_split(base_name, "\\.")[[1]]
+  
+  base_name_simp <- gsub("_pc", "", base_name)
+  parts <- str_split(base_name_simp, "\\.")[[1]]
+  
+  dataset <- parts_orig[1]
+  metrics <- parts[2]
+
+  return(list(dataset = dataset, metrics = metrics, gene_group = gene_group))
+}
+
+
+# Function to filter cell types and retain only relevant columns
+process_file <- function(file_path, cell_types_df) {
+    # Read the file
+    data <- fread(file_path)
+    names(data)[1] <- "ENSG"  # Rename the first column to "ENSG" (gene name)
+
+    # Extract dataset, metrics, and gene_group info from file name
+    file_info <- extract_info_from_filename(file_path)
+
+    # Filter the cell types that are needed for the current dataset
+    relevant_cell_types_df <- cell_types_df %>%
+      filter(Dataset_02 == file_info$dataset)  # Filter relevant dataset
+
+    # Extract CT_ldsc and corresponding CT_fig
+    relevant_cell_types <- relevant_cell_types_df$CT_ldsc
+
+    # Keep only relevant columns (gene name and relevant cell types)
+    relevant_cols <- c("ENSG", relevant_cell_types)
+    filtered_data <- data %>%
+      select(any_of(relevant_cols))  # Keep only relevant columns
+
+    # Rename the cell type columns from CT_ldsc to CT_fig
+    ct_fig_names <- relevant_cell_types_df$CT_fig
+    
+    colnames(filtered_data)[-1] <- ct_fig_names  # Rename cell type columns
+
+    # Add dataset, metrics, and gene_group columns to the filtered data
+    filtered_data <- filtered_data %>%
+      mutate(Dataset = file_info$dataset,
+             Metrics = file_info$metrics,
+             Gene_Group = file_info$gene_group)
+
+    return(filtered_data)
+}
+    
+# Directory with the input files
+#input_dir <- "/QRISdata/Q2120/group_move/MG_set_conAnnot/"
+input_dir <- "/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/"
+
+# Get a list of all the csv files in the directory
+file_list <- list.files(input_dir, pattern = "\\_s.csv$", full.names = TRUE) # 36 files in total
+file_list_tmp=file_list[1:36]
+
+# Initialize all_data
+all_data <- NULL
+
+# Process each file and combine the results
+all_data <- lapply(file_list_tmp, process_file, cell_types_df = cell_types_df) %>% bind_rows()
+
+all_data$Dataset <- gsub("_pc", "", all_data$Dataset)
+
+library(dplyr)
+
+# Adjust dataset name for known mappings
+all_data <- all_data %>%
+  mutate(Dataset = case_when(
+    Dataset == "CARE_snRNA_Heart" ~ "CARE",
+    Dataset == "CARE_snRNA_Heart_expr_gene_withPos" ~ "CARE",
+    Dataset == "Cheng_2018_Cell_Reports" ~ "Cheng_2018_Cell_Reports_updated",
+    Dataset == "HLCA_core_healthy_LP_expr_gene_withPos" ~ "HLCA_core_healthy_LP",
+    Dataset == "Kamath_2022_normal_expr_gene_withPos" ~ "Kamath_2022_normal",
+    Dataset == "tms_facs_1to1" ~ "TMS",
+    Dataset == "ts_1to1" ~ "TS",
+    TRUE ~ Dataset
+  ))
+
+write_csv(all_data, "/scratch/user/uqali4/combined_target_cell_types_sclinker_s_cepo_s.csv")
+
+
+
+# Loop through each file and print the header names
+for (file in file_list) {
+  # Read only the header (first row) to get column names
+  header <- read.csv(file, nrows = 1, check.names = FALSE)
+  
+  # Print the file name and its header names
+  cat("File:", file, "\n")
+  cat("Header names:", paste(colnames(header), collapse = ", "), "\n\n")
+}
+
+
+CT_marker=fread("/scratch/user/uqali4/CT_fig_ditinct_with_marker_genes_complete.txt")
+
+# Convert the 'CT_marker' data to the format of one gene in one row
+formatted_CT_marker <- CT_marker %>%
+  # Separate the marker_genes by commas into individual gene names
+  separate_rows(marker_genes, sep = ", ") %>%
+  # Rename columns for consistency with desired output
+  rename(gene_name = marker_genes, cell_type = CT_fig) %>%
+  # Optionally, you can trim any extra spaces from gene_name or cell_type
+  mutate(gene_name = trimws(gene_name),
+         cell_type = trimws(cell_type)) %>%
+  select(!reference)
+
+
+
+
+# Convert the data to long format
+long_format <- melt(all_data, 
+                    id.vars = c("ENSG", "Dataset", "Metrics", "Gene_Group"),  # Columns to keep in the long format
+                    variable.name = "cell_type",  # Name for the cell type column
+                    value.name = "specificity")  # Name for the values in the long format
+
+head(long_format)
+
+# Match the ensgid genes in the data to symbol genes
+gene_mat <- fread("/QRISdata/Q5059/mBAT/mBAT-main/geneMatrix.tsv") %>% select(ensgid, gene_name, gene_type)
+gene_dt <- inner_join(long_format %>% dplyr::rename(ensgid = ENSG), gene_mat)
+
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung",
+                   "TMS" = "Atlas - Mouse",
+                   "TS" = "Atlas - Human")
+
+# Assign the organ values based on the study column
+gene_dt$organ <- organ_mapping[gene_dt$Dataset]
+
+setDT(gene_dt) 
+gene_dt[, rank := frank(-specificity, ties.method = "average"), by = .(Metrics, Dataset, Gene_Group, cell_type)]
+write_csv(gene_dt, "/scratch/user/uqali4/combined_target_cell_types_sclinker_s_cepo_s.csv") #Now save: /QRISdata/Q2120/CT_specificity/
+
+
+
+
+# Extract top 1000 genes based on specificity within each unique combination of Metrics, Dataset, and cell_type
+top_1000_genes <- gene_dt %>%
+  group_by(Metrics, Dataset, cell_type) %>%
+  slice_max(order_by = specificity, n = 1000, with_ties = FALSE) %>%
+  ungroup()
+
+
+# Recalculate rank within each unique combination of Metrics, Dataset, and cell_type
+setDT(top_1000_genes)
+top_1000_genes[, rank := frank(-specificity, ties.method = "average"), by = .(Metrics, Dataset, Gene_Group, cell_type)]
+head(top_1000_genes)
+
+
+write_csv(top_1000_genes, "/scratch/user/uqali4/combined_target_cell_types_sclinker_s_cepo_s_rank_top1000.csv")
+
+combined_data_CT_top_1000 <- top_1000_genes %>% 
+  inner_join(formatted_CT_marker, by = c("gene_name", "cell_type")) %>%
+  select(gene_name, cell_type, Metrics, rank, Gene_Group, organ) 
+
+head(combined_data_CT_top_1000)
+write.table(combined_data_CT_top_1000,"/scratch/user/uqali4/Fig3A_relevence_1k_sclinker_s_cepo_s.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+```
+
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/Fig3A_relevence_1k_sclinker_s_cepo_s.txt /Users/uqali4/Manuscripts/Benchmark/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

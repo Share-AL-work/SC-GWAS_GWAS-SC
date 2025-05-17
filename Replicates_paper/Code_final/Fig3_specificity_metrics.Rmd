@@ -1,0 +1,985 @@
+
+scp -r "/Users/angox/Downloads/Manuscripts/Benchmark/benchmark_stat/*" uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/benchmark_stat/
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/Fig3A_relevence_1k_sclinker_original.txt  /Users/angox/Downloads/Manuscripts/Benchmark/
+
+scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/Fig3A_relevence.txt /Users/angox/Downloads/Manuscripts/Benchmark/
+
+scp -r "/Users/angox/Downloads/Manuscripts/Benchmark/Results/S_table2.xlsx" uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/
+scp -r /Users/angox/Downloads/Manuscripts/Benchmark/CT_fig_ditinct_datasets.txt uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/
+scp -r /Users/angox/Downloads/Manuscripts/Benchmark/CT_fig_ditinct_with_marker_genes_complete.txt uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/
+
+# Check the specificity metrics for the same cell types in single organ and atlas data
+/scratch/project/genetic_data_analysis/uqali4/MG_set_conAnnot/*
+/QRISdata/Q2120/group_move/MG_set_conAnnot/*
+
+/scratch/user/uqali4/MG_set_conAnnot/
+
+
+# sclinker-original: /QRISdata/Q5059/sc_linker/healthy/new_organ/
+
+```{r}
+
+# Load packages
+
+library(tidyr)
+library(Seurat)
+library(SingleCellExperiment)
+library(EWCE) 
+library(zellkonverter)
+library(DelayedMatrixStats)
+library(DelayedArray)
+library(Cepo)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(readxl)
+
+```
+
+# Use ChatGPT to help finding the marker genes and ref
+```{r}
+#
+file_path <- "/Users/angox/Downloads/Manuscripts/Benchmark/Results/S_table2.xlsx"
+
+#file_path <- "/scratch/user/uqali4/S_table2.xlsx"
+Trait_dt2 <- read_excel(file_path, sheet = "Cell_type_candidates")%>%select(c("CT_ldsc","Dataset","CT_fig"))%>%distinct()
+
+write.table(Trait_dt2, "/Users/angox/Downloads/Manuscripts/Benchmark/CT_fig_ditinct_datasets.txt", 
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+
+```
+
+
+
+# Collect 28 cell type names from my pairs in scracth.
+# Read in Marker genes for cell types.
+```{r}
+library(data.table)
+library(dplyr)
+library(readr)
+library(stringr)
+library(tidyr)
+
+# Load the cell types mapping file
+cell_types_df <- fread("/scratch/user/uqali4/CT_fig_ditinct_datasets.txt")
+
+tmp_cell_types_df=data.frame(CT_ldsc=c("CD8-positive__alpha-beta_T_cell","CD4-positive__alpha-beta_T_cell","CD8_positive__alpha_beta_T_cell","CD4_positive__alpha_beta_T_cell"),
+                             Dataset=c("HLCA_core_healthy_LP","HLCA_core_healthy_LP","HLCA_core_healthy_LP","HLCA_core_healthy_LP"),
+                             CT_fig=c("CD8-positive, alpha-beta T cell","CD4-positive, alpha-beta T cell","CD8-positive, alpha-beta T cell","CD4-positive, alpha-beta T cell"))
+
+cell_types_df <- rbind(cell_types_df, tmp_cell_types_df) %>%
+  filter(!(Dataset == "TS" & CT_fig == "ventricular myocyte"))
+
+
+cell_types_df1 <- fread("/scratch/user/uqali4/CT_fig_ditinct_datasets.txt")%>%filter(!Dataset==c("HLCA_core_healthy_LP"))
+sclinker_score_CT_df=data.frame(CT_ldsc=c("CD8-positive, alpha-beta T cell","CD4-positive, alpha-beta T cell", "alveolar type 2 fibroblast cell", "tracheobronchial smooth muscle cell","bronchial goblet cell","type II pneumocyte","B cell"),
+                             Dataset=c("HLCA_core_healthy_LP","HLCA_core_healthy_LP","HLCA_core_healthy_LP","HLCA_core_healthy_LP","HLCA_core_healthy_LP","HLCA_core_healthy_LP","HLCA_core_healthy_LP"),
+                             CT_fig=c("CD8-positive, alpha-beta T cell","CD4-positive, alpha-beta T cell","alveolar type 2 fibroblast cell", "tracheobronchial smooth muscle cell","bronchial goblet cell","type II pneumocyte","B-cell"))
+cell_types_df <- rbind(cell_types_df1, sclinker_score_CT_df)%>%
+  filter(!(Dataset == "TS" & CT_fig == "ventricular myocyte")) 
+
+
+# Function to extract dataset name, metrics, and gene_group from file name
+extract_info_from_filename <- function(filename) {
+  # Remove the full path
+  base_name <- basename(filename)
+  
+  # Extract gene group
+  gene_group <- ifelse(grepl("_pc", base_name), "PCgenes", "allgene")
+  
+  # Extract metrics and dataset name
+  base_name <- gsub("_pc", "", base_name)
+  parts <- str_split(base_name, "\\.")[[1]]
+  dataset <- parts[1]
+  metrics <- parts[2]
+  
+  # Adjust dataset name for known mappings
+  dataset <- case_when(
+    dataset == "CARE_expr_gene_withPos" ~ "CARE",
+    dataset == "Cheng_2018_Cell_Reports" ~ "Cheng_2018_Cell_Reports_updated",
+    dataset == "HLCA_core_healthy_LP_expr_gene" ~ "HLCA_core_healthy_LP",
+    dataset == "Kamath_2022_normal_expr_gene" ~ "Kamath_2022_normal",
+    dataset == "tms" ~ "TMS",
+    dataset == "ts" ~ "TS",
+    TRUE ~ dataset
+  )
+  return(list(dataset = dataset, metrics = metrics, gene_group = gene_group))
+}
+
+process_file_sclinker <- function(file_path, cell_types_df) {
+  # Read the file
+  data <- fread(file_path)
+  
+  # Rename the first column to "ENSG"
+  colnames(data)[1] <- "ENSG"
+  
+  # Remove everything after "_L" (including "_L") in the rest of the column names
+  colnames(data)[-1] <- gsub("_L.*$", "", colnames(data)[-1])
+  
+  # Extract dataset, metrics, and gene_group info from file name
+  file_info <- extract_info_from_filename(file_path)
+  
+  # Filter the cell types that are needed for the current dataset
+  relevant_cell_types_df <- cell_types_df %>%
+    filter(Dataset == file_info$dataset)  # Filter relevant dataset
+  
+  # Extract CT_ldsc and corresponding CT_fig
+  relevant_cell_types <- relevant_cell_types_df$CT_ldsc
+  
+  # Keep only relevant columns (gene name and relevant cell types)
+  relevant_cols <- c("ENSG", relevant_cell_types)
+  filtered_data <- data %>%
+    select(any_of(relevant_cols))  # Keep only relevant columns
+  
+  # Rename the cell type columns from CT_ldsc to CT_fig
+  ct_fig_names <- relevant_cell_types_df$CT_fig
+  
+  # Check if the number of selected columns matches the length of CT_fig names
+  if (length(colnames(filtered_data)[-1]) != length(ct_fig_names)) {
+    warning(paste("Mismatch in number of columns for file:", file_path))
+    warning(paste("Number of columns in filtered_data:", length(colnames(filtered_data)[-1])))
+    warning(paste("Number of CT_fig names:", length(ct_fig_names)))
+  }
+  
+  # Rename cell type columns if there is no mismatch
+  if (length(colnames(filtered_data)[-1]) == length(ct_fig_names)) {
+    colnames(filtered_data)[-1] <- ct_fig_names  # Rename cell type columns
+  } else {
+    return(NULL)  # Return NULL if there's a mismatch, so the file is skipped
+  }
+  
+  # Add dataset, metrics, and gene_group columns to the filtered data
+  filtered_data <- filtered_data %>%
+    mutate(Dataset = file_info$dataset,
+           Metrics = file_info$metrics,
+           Gene_Group = file_info$gene_group)
+  
+  return(filtered_data)
+}
+
+all_data <- NULL
+# Process the files and combine the results, with warnings for problematic files
+all_data <- lapply(file_list, process_file_sclinker, cell_types_df = cell_types_df) %>%
+  bind_rows()
+
+write_csv(all_data, "/scratch/user/uqali4/combined_target_cell_types_sclinker_original.csv")
+
+# Function to filter cell types and retain only relevant columns
+process_file <- function(file_path, cell_types_df) {
+    # Read the file
+    data <- fread(file_path)
+    names(data)[1] <- "ENSG"  # Rename the first column to "ENSG" (gene name)
+
+    # Extract dataset, metrics, and gene_group info from file name
+    file_info <- extract_info_from_filename(file_path)
+
+    # Filter the cell types that are needed for the current dataset
+    relevant_cell_types_df <- cell_types_df %>%
+      filter(Dataset == file_info$dataset)  # Filter relevant dataset
+
+    # Extract CT_ldsc and corresponding CT_fig
+    relevant_cell_types <- relevant_cell_types_df$CT_ldsc
+
+    # Keep only relevant columns (gene name and relevant cell types)
+    relevant_cols <- c("ENSG", relevant_cell_types)
+    filtered_data <- data %>%
+      select(any_of(relevant_cols))  # Keep only relevant columns
+
+    # Rename the cell type columns from CT_ldsc to CT_fig
+    ct_fig_names <- relevant_cell_types_df$CT_fig
+    
+    if (any(duplicated(ct_fig_names))) {
+      exact_duplicates <- ct_fig_names[duplicated(ct_fig_names)]
+      warning(paste("Exact duplicate CT_fig names found in file:", file_path, ". Modifying them to ensure uniqueness:", exact_duplicates))
+      ct_fig_names <- make.unique(ct_fig_names)  # Make the exact duplicates unique
+    }
+    
+    colnames(filtered_data)[-1] <- ct_fig_names  # Rename cell type columns
+
+    # Add dataset, metrics, and gene_group columns to the filtered data
+    filtered_data <- filtered_data %>%
+      mutate(Dataset = file_info$dataset,
+             Metrics = file_info$metrics,
+             Gene_Group = file_info$gene_group)
+
+    return(filtered_data)
+}
+    
+# Directory with the input files
+#input_dir <- "/QRISdata/Q2120/group_move/MG_set_conAnnot/"
+input_dir <- "/scratch/user/uqali4/MG_set_conAnnot/"
+#input_dir <- "/scratch/user/uqali4/benchmark_stat"
+
+# Get a list of all the csv files in the directory
+file_list <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+
+# Initialize all_data
+all_data <- NULL
+
+# Process each file and combine the results
+all_data <- lapply(file_list, process_file, cell_types_df = cell_types_df) %>% bind_rows()
+
+
+# Define pattern replacements for metrics names
+pattern_replacements <- c(
+  "esmu" = "CELLECT-ESμ",
+  "ges_esw" = "CELLECT-GES",
+  "ges" = "CELLECT-GES",
+  "det_esw" = "CELLECT-DET",
+  "det" = "CELLECT-DET",
+  "nsi_esw" = "CELLECT-NSI",
+  "nsi" = "CELLECT-NSI",
+  "ep_esw" = "CELLECT-EP",
+  "ep" = "CELLECT-EP",
+  "cepo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+all_data <- all_data %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  }))
+
+pattern_replacements <- c(
+  "CELLECT-GES" = "CELLECT-GES_s",
+  "CELLECT-DET" = "CELLECT-DET_s",
+  "CELLECT-NSI" = "CELLECT-NSI_s",
+  "CELLECT-EP" = "CELLECT-EP_s",
+  "cCELLECT-EPo_norm" = "Cepo"
+)
+
+# Apply the replacements to metrics names
+all_data <- all_data %>%
+  mutate(Metrics = sapply(Metrics, function(x) {
+    for (pattern in names(pattern_replacements)) {
+      x <- gsub(pattern, pattern_replacements[pattern], x)
+    }
+    return(x)
+  }))
+
+
+all_data$Metrics[all_data$Metrics == "cCELLECT-EP_so_norm"] <- "Cepo_norm"
+all_data$Metrics[all_data$Metrics == "Cepo_norm"] <- "Cepo"
+all_data$Metrics[all_data$Metrics == "CELLECT-DET_s_s"] <- "CELLECT-DET_s"
+all_data$Metrics[all_data$Metrics == "CELLECT-EP_s_s"] <- "CELLECT-EP_s"
+all_data$Metrics[all_data$Metrics == "CELLECT-GES_s_s"] <- "CELLECT-GES_s"
+all_data$Metrics[all_data$Metrics == "CELLECT-NSI_s_s"] <- "CELLECT-NSI_s"
+
+
+# Write the final combined dataset to a CSV file
+#write_csv(all_data, "/scratch/user/uqali4/combined_target_cell_types_metrics.csv")
+
+CT_marker=fread("/scratch/user/uqali4/CT_fig_ditinct_with_marker_genes_complete.txt")
+
+# Convert the data to long format
+long_format <- melt(all_data, 
+                    id.vars = c("ENSG", "Dataset", "Metrics", "Gene_Group"),  # Columns to keep in the long format
+                    variable.name = "cell_type",  # Name for the cell type column
+                    value.name = "specificity")  # Name for the values in the long format
+
+head(long_format)
+
+# Match the ensgid genes in the data to symbol genes
+gene_mat <- fread("/QRISdata/Q5059/mBAT/mBAT-main/geneMatrix.tsv") %>% select(ensgid, gene_name, gene_type)
+gene_dt <- inner_join(long_format %>% dplyr::rename(ensgid = ENSG), gene_mat)
+gene_dt$Dataset=gsub("_expr_genes","",gene_dt$Dataset)
+write_csv(gene_dt, "/scratch/user/uqali4/combined_target_cell_types_metrics.csv")
+
+gene_mat <- fread("/QRISdata/Q5059/mBAT/mBAT-main/geneMatrix.tsv") %>% select(ensgid, gene_name, gene_type)
+gene_dt_sclinker_original <- inner_join(long_format %>% dplyr::rename(ensgid = ENSG), gene_mat)
+#gene_dt_sclinker_original$Dataset=gsub("Kamath_2022_normals","Kamath_2022_normal",gene_dt_sclinker_original$Dataset)
+gene_dt_sclinker_original$Dataset=gsub("_expr_genes","",gene_dt_sclinker_original$Dataset)
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung",
+                   "TMS" = "Atlas - Mouse",
+                   "TS" = "Atlas - Human")
+
+# Assign the organ values based on the study column
+gene_dt_sclinker_original$organ <- organ_mapping[gene_dt_sclinker_original$Dataset]
+write_csv(gene_dt_sclinker_original, "/scratch/user/uqali4/combined_target_cell_types_sclinker_original.csv")
+
+
+
+
+setDT(gene_dt_sclinker_original) 
+
+gene_dt_sclinker_original[, rank := frank(-specificity, ties.method = "average"), by = .(Metrics, Dataset, Gene_Group, cell_type)]
+
+
+combined_data_CT <- gene_dt_sclinker_original %>% 
+  inner_join(formatted_CT_marker, by = c("gene_name", "cell_type")) %>%
+  select(gene_name, cell_type, Metrics, rank, Gene_Group, organ) 
+
+head(combined_data_CT)
+
+
+write.table(combined_data_CT,"/scratch/user/uqali4/Fig3A_relevence_sclinker_original.txt",row.names=F,col.names=T,quote=F,sep="\t")
+f=fread("/scratch/user/uqali4/Fig3A_relevence.txt")
+
+
+
+# Extract top 1000 genes based on specificity within each unique combination of Metrics, Dataset, and cell_type
+top_1000_genes <- gene_dt %>%
+  group_by(Metrics, Dataset, cell_type) %>%
+  slice_max(order_by = specificity, n = 1000, with_ties = FALSE) %>%
+  ungroup()
+
+# Recalculate rank within each unique combination of Metrics, Dataset, and cell_type
+setDT(top_1000_genes)
+top_1000_genes[, rank := frank(-specificity, ties.method = "average"), by = .(Metrics, Dataset, Gene_Group, cell_type)]
+head(top_1000_genes)
+
+top_1000_genes$Dataset=gsub("_expr_gene","",top_1000_genes$Dataset)
+top_1000_genes$Dataset[top_1000_genes$Dataset == "Kamath_2022_normals"] <- "Kamath_2022_normal"
+
+write_csv(top_1000_genes, "/scratch/user/uqali4/combined_target_cell_types_sclinker_original_rank_top1000.csv")
+
+write_csv(top_1000_genes, "/scratch/user/uqali4/combined_target_cell_types_metrics_rank_top1000.csv")
+
+# Calculate rank within each cell type for each metric
+setDT(gene_dt)  # Convert it to a data.table
+
+# frank(): The frank() function is used to compute the rank. We use -specificity to rank by descending specificity.
+# Grouping: The by = .(Metrics, Dataset, cell_type) ensures that the ranking is done within each combination of Metrics, Dataset, and cell_type.
+# ties.method = "average": This method gives the average rank to tied values.
+
+# Recalculate rank within each unique combination of Metrics, Dataset, and cell_type
+gene_dt[, rank := frank(-specificity, ties.method = "average"), by = .(Metrics, Dataset, Gene_Group, cell_type)]
+
+head(gene_dt)
+
+# Write the final combined dataset to a CSV file
+write_csv(gene_dt, "/scratch/user/uqali4/combined_target_cell_types_metrics_rank.csv")
+
+
+# Convert the 'CT_marker' data to the format of one gene in one row
+formatted_CT_marker <- CT_marker %>%
+  # Separate the marker_genes by commas into individual gene names
+  separate_rows(marker_genes, sep = ", ") %>%
+  # Rename columns for consistency with desired output
+  rename(gene_name = marker_genes, cell_type = CT_fig) %>%
+  # Optionally, you can trim any extra spaces from gene_name or cell_type
+  mutate(gene_name = trimws(gene_name),
+         cell_type = trimws(cell_type)) %>%
+  select(!reference)
+
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung",
+                   "TMS" = "Atlas - Mouse",
+                   "TS" = "Atlas - Human")
+
+# Assign the organ values based on the study column
+gene_dt$organ <- organ_mapping[gene_dt$Dataset]
+
+top_1000_genes$organ <- organ_mapping[top_1000_genes$Dataset]
+combined_data_CT_top_1000 <- top_1000_genes %>% 
+  inner_join(formatted_CT_marker, by = c("gene_name", "cell_type")) %>%
+  select(gene_name, cell_type, Metrics, rank, Gene_Group, organ) 
+
+head(combined_data_CT_top_1000)
+write.table(combined_data_CT_top_1000,"/scratch/user/uqali4/Fig3A_relevence_1k.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+write.table(combined_data_CT_top_1000,"/scratch/user/uqali4/Fig3A_relevence_1k_sclinker_original.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+
+combined_data_CT <- gene_dt %>% 
+  inner_join(formatted_CT_marker, by = c("gene_name", "cell_type")) %>%
+  select(gene_name, cell_type, Metrics, rank, Gene_Group, organ) 
+
+head(combined_data_CT)
+
+
+write.table(combined_data_CT,"/scratch/user/uqali4/Fig3A_relevence.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+
+```
+
+
+```{bash}
+#!/bin/bash
+
+# Directory containing the files
+directory="/QRISdata/Q2120/group_move/MG_set_conAnnot/"
+
+# Loop through each .csv file in the directory
+for file in "$directory"*.csv; do
+    # Read the first line of the file
+    first_line=$(head -n 1 "$file")
+    
+    # Check if the first line contains "gene" at the start
+    if [[ "$first_line" =~ ^gene ]]; then
+        echo "File $file: First row starts with 'gene'"
+    else
+        echo "File $file: First row does NOT start with 'gene'"
+    fi
+done
+
+```
+
+
+```{r}
+
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(ggpubr)
+library(ggbeeswarm)
+
+
+combined_data_CT1 = fread("/Users/angox/Downloads/Manuscripts/Benchmark/Fig3A_relevence_1k.txt")
+combined_data_CT2 = fread("/Users/angox/Downloads/Manuscripts/Benchmark/Fig3A_relevence_1k_sclinker_original.txt")
+combined_data_CT3 = fread("/Users/angox/Downloads/Manuscripts/Benchmark/Fig3A_relevence_1k_sclinker_s_cepo_s.txt")
+combined_data_CT = rbind(combined_data_CT1,combined_data_CT2,combined_data_CT3)
+
+combined_data_CT$Metrics[combined_data_CT$Metrics == "TDEP"] <- "EP"
+combined_data_CT$Metrics[combined_data_CT$Metrics == "sclinker"] <- "sclinker-GS"
+combined_data_CT$Metrics[combined_data_CT$Metrics == "sclinker_original"] <- "sclinker"
+# Specify the desired order for the Metrics
+desired_order <- c("CELLECT-DET_s", "CELLECT-EP_s", "CELLECT-GES_s", 
+                   "CELLECT-NSI_s", "CELLECT-ESμ", "EP", 
+                   "sclinker-GS", "sclinker","sclinker_s","Cepo","Cepo_s")
+
+# Convert the Metrics column to a factor with the specified order
+combined_data_CT$Metrics <- factor(combined_data_CT$Metrics, levels = desired_order)
+
+# Create a new column 'organ_type' based on the values in 'organ'
+combined_data_CT <- combined_data_CT %>%
+  mutate(`Data type` = ifelse(organ %in% c("Atlas - Human", "Atlas - Mouse"), organ, "Single Organ"))
+
+head(combined_data_CT)
+
+```
+
+# Draw figures
+```{r}
+
+ggplot(combined_data_CT, aes(x = Metrics, y = 1/rank, fill = organ)) + 
+  geom_boxplot(aes(color = organ), fill = NA) +  # Transparent boxplot (no fill)
+  stat_summary(fun = mean, geom = "point", shape = 19, size = 2, color = "black", position = position_dodge(width = 0.9)) + 
+  geom_point(aes(color = organ), position = position_dodge(width = 0.8), size = 1) + 
+  facet_grid(Gene_Group ~ ., scales = "free_y") + 
+  scale_fill_brewer(palette = "Paired") + 
+  scale_color_brewer(palette = "Paired") + 
+  labs(x = NULL, y = "1/rank") + 
+  theme_minimal() + 
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_text(angle = 15, hjust = 1, margin = margin(t = 2), color = "black", size = 12, face = "bold"),  # Bold x-axis text
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) 
+
+
+library(paletteer)
+
+test_1p=ggplot(combined_data_CT, aes(x = Metrics, y = -log10(rank), fill = `Data type`)) + 
+  geom_violin(aes(color = `Data type`), fill = NA) +  # Transparent violin plot (no fill)
+  stat_summary(fun = mean, geom = "point", shape = 4, size = 3, color = "black", position = position_dodge(width = 0.9)) + 
+  geom_point(aes(color = `Data type`), position = position_dodge(width = 0.8), size = 1) + 
+  facet_grid(Gene_Group ~ ., scales = "free_y") + 
+  scale_fill_paletteer_d("wesanderson::Darjeeling1") +  # Corrected paletteer call for fill
+  scale_color_paletteer_d("wesanderson::Darjeeling1") +  # Corrected paletteer call for color
+  labs(x = NULL, y = "-Log10(Rank)") + 
+  theme_minimal() + 
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_text(angle = 90, hjust = 1, margin = margin(t = 2), color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) +
+  coord_cartesian(ylim = c(-log10(1000), log10(1)))
+
+test_1p
+
+
+# Log transformation 
+test_2p=ggplot(combined_data_CT, aes(x = Metrics, y = -log10(rank), fill = organ)) + 
+  geom_boxplot(aes(color = organ), fill = NA) +  # Transparent boxplot (no fill)
+  stat_summary(fun = mean, geom = "point", shape = 19, size = 2, color = "black", position = position_dodge(width = 0.9)) + 
+  geom_point(aes(color = organ), position = position_dodge(width = 0.8), size = 1) + 
+  facet_grid(Gene_Group ~ .,scale="free_y") +
+  scale_fill_brewer(palette = "Paired") + 
+  scale_color_brewer(palette = "Paired") + 
+  labs(x = NULL, y = "-Log10(Rank)") + 
+  theme_minimal() + 
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_text(angle = 15, hjust = 1, margin = margin(t = 2), color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) + 
+  coord_cartesian(ylim = c(-log10(1000), log10(1)))
+ # Adjust the y-axis limits for log scale
+test_2p
+
+# Density plot showing the distribution of ranks
+library(ggridges)
+
+p1=ggplot(combined_data_CT %>% filter(organ %in% c("Atlas - Human")), 
+       aes(x = rank, y = Metrics, fill = Metrics)) + 
+  geom_density_ridges(alpha = 0.6, color = "black", scale = 1.2) +  # Ridgeline plot
+  scale_fill_brewer(palette = "Paired") + 
+  labs(x = "Rank", y = "Metrics") + 
+  theme_minimal() + 
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_text(color = "black", size = 10, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) + 
+  labs(
+    title = "",
+    y = ""
+  )
+
+p1
+
+
+library(ggplot2)
+library(dplyr)
+library(forcats)
+
+# Update the Metrics column to replace "ESμ" with a proper representation
+combined_data_CT <- combined_data_CT %>%
+  mutate(Metrics = fct_recode(Metrics,
+                              `CELLECT-ESμ` = "CELLECT-ESμ",
+                              `CELLECT-DET_s` = "CELLECT-DET_s",
+                              `CELLECT-EP_s` = "CELLECT-EP_s",
+                              `CELLECT-GES_s` = "CELLECT-GES_s",
+                              `CELLECT-NSI_s` = "CELLECT-NSI_s",
+                              `Cepo` = "Cepo",
+                              `EP` = "EP",
+                              `sclinker-GS` = "sclinker-GS",
+                              `sclinker` = "sclinker",
+                              `Cepo_s` = "Cepo_s",
+                              `sclinker_s` = "sclinker_s"))
+
+# Generate the plot
+fig3a <- ggplot(combined_data_CT %>% filter(organ %in% c("Atlas - Human")), aes(x = rank, fill = Metrics)) +
+  geom_density(alpha = 0.6, color = "black") +  # Density plot for distribution
+  scale_fill_brewer(palette = "Paired") +
+  labs(x = "Rank", y = "Density") +
+  theme_minimal() +
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_text(color = "black", size = 10, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) +
+  facet_grid(. ~ Metrics, scales = "free")
+
+# Save the plot
+#ggsave("/Users/uqali4/Fig3a.Atlas_based_metrics_finding_markergenes.pdf", fig3a, width = 19, height = 4, dpi = 300, limitsize = FALSE)
+
+
+ggplot(combined_data_CT %>% filter(!organ %in% c("Atlas - Human", "Atlas - Mouse")), 
+       aes(x = rank, fill = Metrics)) +  
+    geom_density(alpha = 0.6, color = "black") +  # Density plot for distribution
+    scale_fill_brewer(palette = "Paired") +  
+    labs(x = "Rank", y = "Density") +  
+    theme_minimal() +  
+    theme(
+        plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+        strip.text = element_text(size = 12, face = "bold"),
+        axis.line = element_line(color = "black", size = 0.4),
+        axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+        axis.text.x = element_text(color = "black", size = 12, face = "bold"),
+        panel.border = element_rect(colour = "black", fill = NA, size = 1)
+    ) +
+    facet_wrap(~ Gene_Group + organ, scales = "free", nrow = 4)
+
+
+
+```
+
+
+
+# cell type specificity scores comparison between a organ and TS.
+
+```{r}
+
+
+#write.table(method_common,"method_common.txt",row.names=F,col.names=T,quote=F,sep="\t") #local
+
+method_common=fread("/scratch/user/uqali4/method_common.txt")
+file_path <- "/scratch/user/uqali4/S_table2.xlsx"
+Trait_dt2 <- read_excel(file_path, sheet = "Cell_type_candidates")%>%select(c("Property","Dataset","CT_fig","Phenotype",`Chategory [Follow by Phenotype]`))%>%distinct()
+method_common$organ[method_common$organ == "Atlas"] <- "Atlas - Human"
+
+
+gene_dt = inner_join(gene_dt%>%dplyr::rename(CT_fig=cell_type),
+                                 Trait_dt2%>%select(Phenotype,CT_fig,Dataset,Property,`Chategory [Follow by Phenotype]`))%>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  filter(CT_Pheno%in%c(unique(method_common$CT_Pheno)))
+#gene_dt_ESmu=gene_dt_pheno%>%filter(Metrics=="CELLECT-ESμ")
+#gene_dt_ESmu=gene_dt%>%filter(Metrics=="Cepo")
+
+gene_dt_ESmu=gene_dt%>%filter(Metrics=="CELLECT-GES_s")
+ordered_data <- gene_dt_ESmu %>%
+  filter(!organ == "Atlas - Mouse") %>%
+  filter(!CT_fig == "ventricular myocyte") %>%
+  filter(Gene_Group == "PCgenes") %>%
+  mutate(CT_fig = factor(CT_fig, levels = c("melanocyte","hepatocyte","mesenchymal stem cell/osteoclast", "erythrocyte","MK/platelet","neutrophil", "CD8-positive, alpha-beta T cell","CD4-positive, alpha-beta T cell","B-cell",
+                                            "keratinocyte","pancreatic B cell","pancreatic polypeptide cell", "alveolar type 2 fibroblast cell",
+                                            "tracheobronchial smooth muscle cell","bronchial goblet cell","type II pneumocyte","atrial cardiomyocyte","smooth muscle cell","ventricular myocyte"))) 
+
+
+gene_dt_sclinker_original=inner_join(gene_dt_sclinker_original%>%dplyr::rename(CT_fig=cell_type),
+                                 Trait_dt2%>%select(Phenotype,CT_fig,Dataset,Property,`Chategory [Follow by Phenotype]`))%>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  filter(CT_Pheno%in%c(unique(method_common$CT_Pheno)))
+ordered_data <- gene_dt_sclinker_original %>%
+  filter(!organ == "Atlas - Mouse") %>%
+  filter(!CT_fig == "ventricular myocyte") %>%
+  filter(Gene_Group == "PCgenes") %>%
+  mutate(CT_fig = factor(CT_fig, levels = c("melanocyte","hepatocyte","mesenchymal stem cell/osteoclast", "erythrocyte","MK/platelet","neutrophil", "CD8-positive, alpha-beta T cell","CD4-positive, alpha-beta T cell","B-cell",
+                                            "keratinocyte","pancreatic B cell","pancreatic polypeptide cell", "alveolar type 2 fibroblast cell",
+                                            "tracheobronchial smooth muscle cell","bronchial goblet cell","type II pneumocyte","atrial cardiomyocyte","smooth muscle cell","ventricular myocyte"))) 
+
+ggplot(ordered_data, aes(x = CT_fig, y = specificity, fill = organ)) +  
+  geom_violin(trim = TRUE, alpha = 0.7) +  # Create a violin plot to show specificity distribution
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black", position = position_dodge(width = 0.75)) +  # Add mean dots
+  labs(
+    title = "Specificity of the same cell types in different origins",
+    x = "",  # Hide x-axis label
+    y = "Specificity",
+    fill = "Cell Type"
+  ) +  
+  theme_minimal() +  
+  theme(
+    axis.text.x = element_blank(),  # Hide x-axis text
+    axis.ticks.x = element_blank(),  # Hide x-axis ticks
+    text = element_text(size = 12)
+  ) +  
+  scale_fill_brewer(palette = "Set1") +  
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_blank(),  # Hide x-axis text
+    axis.ticks.x = element_blank(),  # Hide x-axis ticks
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) +  
+  facet_wrap(~CT_fig, scales = "free", nrow = 6)
+
+
+
+
+
+Cepo_top1K=fread("/Users/angox/Downloads/Manuscripts/Benchmark/Cepo_top1K.csv")
+
+organ_mapping <- c("Cheng_2018_Cell_Reports_updated" = "Skin",
+                   "Fasolino_2022_Nat_Metab_normal_only" = "Pancreas",
+                   "2019_Smillie_normal_cellxgene" = "Colon",
+                   "human_liver_atlas_Guilliams_2022_cell" = "Liver",
+                   "FBM_Jardine_2021_Nature" = "Bone Marrow and blood",
+                   "Kamath_2022_normal" = "Brain",
+                   "CARE" = "Heart",
+                   "HLCA_core_healthy_LP" = "Lung",
+                   "TMS" = "Atlas - Mouse",
+                   "TS" = "Atlas - Human")
+
+Cepo_top1K$organ <- organ_mapping[Cepo_top1K$Dataset]
+
+
+Cepo_top1K$Dataset <- ifelse(Cepo_top1K$Dataset == "TS", "Human", ifelse(Cepo_top1K$Dataset == "TMS", "Mouse", Trait_dt2$Dataset))
+
+Cepo_top1K = inner_join(Cepo_top1K%>%dplyr::rename(CT_fig=cell_type),
+                                 Trait_dt2%>%select(Phenotype,CT_fig,Dataset,Property,`Chategory [Follow by Phenotype]`))%>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  filter(CT_Pheno%in%c(unique(method_common$CT_Pheno)))
+
+
+
+```
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+
+gene_dt=inner_join(gene_dt%>%dplyr::rename(CT_fig=cell_type),
+                                 Trait_dt2%>%select(Phenotype,CT_fig,Dataset,Property,`Chategory [Follow by Phenotype]`))%>%
+  mutate(CT_Pheno = paste(CT_fig, Phenotype, sep = "_")) %>%
+  filter(CT_Pheno%in%c(unique(method_common$CT_Pheno)))
+
+# First, order CT_fig based on Chategory and Phenotype #Cepo_top1K
+ordered_data <- gene_dt %>%
+  filter(!organ == "Atlas - Mouse") %>%
+  filter(!CT_fig == "ventricular myocyte") %>%
+  filter(Gene_Group == "PCgenes") %>%
+  mutate(CT_fig = factor(CT_fig, levels = c("melanocyte","hepatocyte","mesenchymal stem cell/osteoclast", "erythrocyte","MK/platelet","neutrophil", "CD8-positive, alpha-beta T cell","CD4-positive, alpha-beta T cell","B-cell",
+                                            "keratinocyte","pancreatic B cell","pancreatic polypeptide cell", "alveolar type 2 fibroblast cell",
+                                            "tracheobronchial smooth muscle cell","bronchial goblet cell","type II pneumocyte","atrial cardiomyocyte","smooth muscle cell","ventricular myocyte")))  # Reorder CT_fig
+
+
+
+# Create the violin plot with the new ordered CT_fig
+p111=ggplot(ordered_data, aes(x = CT_fig, y = specificity, fill = organ)) +  
+  geom_violin(trim = TRUE, alpha = 0.7) +  # Create a violin plot to show specificity distribution
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black", position = position_dodge(width = 0.75)) +  # Add mean dots
+  labs(
+    title = "Specificity of the same cell types in different origins",
+    x = "",  # Hide x-axis label
+    y = "Specificity",
+    fill = "Cell Type"
+  ) +  
+  theme_minimal() +  
+  theme(
+    axis.text.x = element_blank(),  # Hide x-axis text
+    axis.ticks.x = element_blank(),  # Hide x-axis ticks
+    text = element_text(size = 12)
+  ) +  
+  scale_fill_brewer(palette = "Set1") +  
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_blank(),  # Hide x-axis text
+    axis.ticks.x = element_blank(),  # Hide x-axis ticks
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) +  
+  facet_wrap(~CT_fig, scales = "free", nrow = 6)
+
+p111
+
+```
+
+
+```{r}
+method_common$organ[method_common$organ == "Atlas"] <- "Atlas - Human"
+
+DT_ordered_spec_cepo_compairs = inner_join(
+  method_common %>% select(-`Chategory [Follow by Phenotype]`), 
+  ordered_data %>% select(-c(ensgid, Dataset, Gene_Group, gene_name, gene_type, `Chategory [Follow by Phenotype]`))
+)
+
+DT_ordered_spec_cepo_compairs = inner_join(
+  DT_ordered_spec_cepo_compairs, 
+  scDRS_common %>% select(n_cell, CT_fig) %>% distinct()
+)
+
+
+
+ggplot(DT_ordered_spec_cepo_compairs, aes(x = log2(n_cell), y = -log10(P), shape = Method)) +  
+  geom_point(aes(color = organ), size = 2, alpha = 0.7) +  
+  facet_wrap(~Method) +  # Facet by Method
+  labs(
+    title = "Correlation between P-values and cell number",
+    x = "log2-[number of cells]",
+    y = "-log10(P-value)",
+    color = "Organ"  # Fix the label to color Organ (was Method)
+  ) +  
+  theme_minimal() +  
+  theme(
+    text = element_text(size = 12),  # Adjust text size
+    strip.text = element_text(size = 12, face = "bold"),  # Customize facet labels
+    panel.border = element_rect(color = "black", fill = NA, size = 1),  # Border around facets
+    axis.text.x = element_text(angle = 90, hjust = 1),  # Rotate x-axis labels for readability
+    plot.margin = unit(c(1, 1, 1.5, 2), "cm")  # Add more space on the left side
+  ) +  
+  scale_color_brewer(palette = "Set1") +  
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5) +  # Add horizontal dashed line
+  geom_vline(xintercept = log2(20), linetype = "dotted", color = "red", size = 0.5)# +  # Add vertical dashed line
+  #annotate("text", x = log2(20) + 0.1, y = min(-log10(DT_ordered_spec_cepo_compairs$P)), label = "log2(20)", color = "red", hjust = 0) +  # Annotate x-axis with log2(20)
+ # annotate("text", x = 3.5, y = -log10(0.05), label = "-log10(0.05)", color = "red", vjust = -2, hjust = 1)  # Move the label outside the y-axis
+#
+
+
+```
+
+
+# only keep DET, CELLECT-ESmu, EP, sc-linker, and Cepo, remove the Metrics legend for Fig3a.Atlas_based_metrics_finding_markergenes.pdf
+# For JZ's grant proposal
+```{r}
+Specific_dt = combined_data_CT%>%filter(Metrics%in%c("CELLECT-DET_s", "CELLECT-ESμ", "EP", "sclinker", "Cepo"))
+# Convert 'Metrics' to character, modify it, and convert back to factor
+Specific_dt$Metrics <- as.character(Specific_dt$Metrics)
+Specific_dt$Metrics[Specific_dt$Metrics == "CELLECT-DET_s"] <- "DET"
+
+# Specify the desired order for the Metrics
+desired_metrics_order <- c("DET", "CELLECT-ESμ", "EP", "sclinker", "Cepo")
+
+# Convert the Metrics column to a factor with the specified order
+Specific_dt$Metrics <- factor(Specific_dt$Metrics, levels = desired_metrics_order)
+# Check the updated levels
+unique(Specific_dt$Metrics)
+
+
+fig3a_rev <- ggplot(Specific_dt %>% filter(organ %in% c("Atlas - Human"),), aes(x = rank, fill = Metrics)) +
+  geom_density(alpha = 0.6, color = "black") +  # Density plot for distribution
+  scale_fill_brewer(palette = "Paired") +
+  labs(x = "Rank", y = "Density") +
+  theme_minimal() +
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 10, face = "bold"),
+    axis.text.x = element_text(color = "black", size = 10, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  ) +
+  facet_grid(. ~ Metrics, scales = "free")
+
+fig3a_rev
+
+
+# Save the plot
+#ggsave("/Users/uqali4/Fig3a.Atlas_based_metrics_finding_markergenes.pdf", fig3a, width = 19, height = 4, dpi = 300, limitsize = FALSE)
+
+
+Specific_dt_conLDSC = conLDSC_atlas_final%>%filter(!Property=="Resultant")%>%filter(Dataset=="Human",Baseline=="v1.1")%>%filter(Metrics%in%c("CELLECT-DET_s", "CELLECT-ESμ", "EP", "sclinker", "Cepo"))
+Specific_dt_conLDSC$Metrics <- as.character(Specific_dt_conLDSC$Metrics)
+Specific_dt_conLDSC$Metrics[Specific_dt_conLDSC$Metrics == "CELLECT-DET_s"] <- "DET"
+Specific_dt_conLDSC$Method="continuous-LDSC"
+
+
+Specific_dt_conMGset = conMGset_atlas%>%filter(!Property=="Resultant")%>%filter(Dataset=="Human")%>%filter(Metrics%in%c("CELLECT-DET_s", "CELLECT-ESμ", "EP", "sclinker", "Cepo"))
+Specific_dt_conMGset$Metrics <- as.character(Specific_dt_conMGset$Metrics)
+Specific_dt_conMGset$Metrics[Specific_dt_conMGset$Metrics == "CELLECT-DET_s"] <- "DET"
+
+Specific_dt_con = rbind(Specific_dt_conMGset%>%select("P","Metrics","Method","Property"),Specific_dt_conLDSC%>%select("P","Metrics","Method","Property"))
+
+# Convert the Metrics column to a factor with the specified order
+Specific_dt_con$Metrics <- factor(Specific_dt_con$Metrics, levels = desired_metrics_order)
+
+
+fig3a_rev2=ggplot(Specific_dt_con, aes(x = Metrics, y=-log10(P), fill=factor(Metrics))) +
+  geom_violin() +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black", position = position_dodge(width = 0.9)) +
+  facet_grid(Property~Method)+
+  labs(
+    title = "",
+    x = "Method",
+    y = "-log10-P",
+    fill = "Metrics"
+  ) + theme_minimal() +
+  theme(
+        axis.text.x = element_text(face = "bold", angle = 90, hjust = 1),
+        text = element_text(size = 12),
+        strip.text = element_text(color="black",size = 12, face = "bold"), 
+        panel.border = element_rect(fill=NA,color="black", size=1, linetype="solid")) +
+  xlab("") +
+  scale_fill_brewer(palette = "Paired") +
+  geom_hline(yintercept = -log10(0.05), linetype="dotted",color = "red", size=0.5)
+
+fig3a_rev2
+
+
+
+```
+
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+
+# Create the first plot (Violin plot)
+fig3a_rev2 <- ggplot(Specific_dt_con, aes(x = Metrics, y = -log10(P), fill = factor(Metrics))) + 
+  geom_violin() + 
+  stat_summary(
+    fun = mean, geom = "point", shape = 20, size = 3, color = "black", 
+    position = position_dodge(width = 0.9)
+  ) + 
+  facet_wrap(Property ~ Method, scales = "free_y") + 
+  labs(x = "", y = "-log10-P") + 
+  theme_minimal() + 
+  theme(
+    axis.text.x = element_text(face = "bold", size = 12),
+    text = element_text(size = 12),
+    axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+    strip.text = element_text(color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(fill = NA, color = "black", size = 1, linetype = "solid"),
+    legend.position = "none"  # Remove legend
+  ) + 
+  xlab("") + 
+  scale_fill_brewer(palette = "Paired") + 
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red", size = 0.5)
+
+
+# Create the second plot (Density plot)
+fig3a_rev <- ggplot(Specific_dt %>% filter(organ %in% c("Atlas - Human")), aes(x = rank, fill = Metrics)) +
+  geom_density(alpha = 0.6, color = "black") +
+  scale_fill_brewer(palette = "Paired") +
+  labs(x = "Rank", y = "Density") +
+  theme_minimal() +
+  theme(
+    plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = "cm"),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.line = element_line(color = "black", size = 0.4),
+    axis.text.y = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(color = "black", size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+    legend.position = "none"  # Remove legend
+  ) +
+  facet_grid(. ~ Metrics, scales = "free")
+
+# Adjusting the heights of the two plots
+combined_fig <- fig3a_rev / fig3a_rev2 + 
+  plot_layout(heights = c(1, 2))  # Set fig3a_rev2 to 2/3 and fig3a_rev to 1/3
+
+# Display the combined figure
+combined_fig
+ggsave("/Users/uqali4/Fig.Metrics_impact.pdf", combined_fig, width = 10, height = 7, dpi = 300, limitsize = FALSE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

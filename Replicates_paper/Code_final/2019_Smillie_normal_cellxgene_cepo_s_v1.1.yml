@@ -1,0 +1,182 @@
+# ---
+############################################################################################################################
+############################################################################################################################
+#################################################### INFORMATION ###########################################################
+
+# All file paths accept absolute and relative paths
+# Environment variables (including ~) are not processed, so don't use them in this config.
+
+
+############################################################################################################################
+############################################ RUN COMMON VARIABLES ##########################################################
+############################################################################################################################
+
+# Folder where all the outputs are saved (LD scores, prioritization results files, etc.)
+# CELLECT-LDSC and CELLECT-MAGMA will write the analysis results into <BASE_OUTPUT_DIR>/CELLECT-LDSC and <BASE_OUTPUT_DIR>/CELLECT-MAGMA subdirectories respectively. The directory and its subdirectories will be created if they do not exist.
+BASE_OUTPUT_DIR: /QRISdata/Q5514/CELLECT_baseline1.1/op_2019_Smillie_normal_cellxgene/Cepo_s
+# only run putative pair cell types.
+
+### SPECIFICITY_INPUT: list of dictionaries
+# id: identifier for the dataset. Output files will be prefixed with the id. MUST be unique and NO double underscores allowed
+# path: the path to the matrix containing specificity scores for each genomic region, does not need to be unique
+# the files can be uncompressed or compressed (gz/bz2 formats are supported).
+SPECIFICITY_INPUT:
+  - id: Cepo_s
+    path: /scratch/user/uqali4/Cepo_esw/cepo_norm_2019_Smillie_normal_cellxgene.Cepo_s.csv
+
+
+### GWAS_SUMSTATS: list of dictionaries
+# id: identifier for GWAS. MUST be unique and NO double underscores allowed
+# path: filepath for munged GWAS sumstats. Uncompressed / gz or bz2 compressed files allowed.
+
+
+GWAS_SUMSTATS:
+
+  - id: Insomnia
+    path: /home/uqali4/Q2120_link/group_move/GWAS_LDSC_format/share_to_Irina/1200.ma.sumstats.gz
+  - id: Coronary_artery_disease
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/GCST90132314_buildGRCh37.tsv_tidy.ma.sumstats.gz
+  - id: SCZ
+    path: /home/uqali4/Q2120_link/group_move/GWAS_LDSC_format/share_to_Irina/PGC3_SCZ_wave3.european.autosome.public.v3.vcf.tsv.ma.sumstats.gz
+  - id: IQ
+    path: /home/uqali4/Q2120_link/group_move/GWAS_LDSC_format/share_to_Irina/meta_analysis_BV_Jansenetal_2020.sumstats.ma.sumstats.gz   
+  - id: Hair
+    path: /home/uqali4/Q2120_link/group_move/GWAS_LDSC_format/share_to_Irina/Hair_color_light_brown.ma.sumstats.gz
+  - id: Asthma
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/20002_1111_logistic.EUR.sumstats.MACfilt.txt_tidy.ma.sumstats.gz
+  - id: Primary_biliary_cirrhosis
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/26394269-GCST003129-EFO_1001486-Build37.f.tsv_tidy.ma.sumstats.gz   
+  - id: Red_blood_cell_count
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/30010_tidy.ma.sumstats.gz
+  - id: Platelet_count
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/30080_tidy.ma.sumstats.gz
+  - id: Lymphocyte_count
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/30120_tidy.ma.sumstats.gz
+  - id: Neutrophil_count
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/30140_tidy.ma.sumstats.gz
+  - id: ADHD
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/ADHD_meta_Jan2022_iPSYCH1_iPSYCH2_deCODE_PGC.meta_tidy.ma.sumstats.gz
+  - id: AD
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/AD_sumstats_Jansenetal_2019sept_tidy.ma.sumstats.gz
+  - id: Alanine_aminotransferase
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Alanine_aminotransferase.imp_tidy.ma.sumstats.gz
+  - id: Alkaline_phosphatase
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Alkaline_phosphatase.imp_tidy.ma.sumstats.gz
+  - id: Systemic_lupus_erythematosus
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/bentham_2015_26502338_sle_efo0002690_1_gwas.sumstats.tsv_tidy.ma.sumstats.gz
+  - id: Bone_mineral_density
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/BMD_v3_SumStats_remove_outliers.ma_tidy.ma.sumstats.gz
+  - id: Crohns_disease
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/cd_build37_40266_20161107.txt_splitted.tab_tidy.ma.sumstats.gz
+  - id: Celiac_disease
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Celiac_disease_tidy.ma.sumstats.gz
+  - id: Cholesterol
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Cholesterol_adjstatins.imp_tidy.ma.sumstats.gz
+  - id: Coronary_atherosclerosis
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Coronary_atherosclerosis_tidy.ma.sumstats.gz
+  - id: T2D
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/EUR_Metal_LDSC-CORR_Neff.v2.txt_tidy.ma.sumstats.gz
+  - id: Eosinophill_count
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Eosinophill_count_tidy.ma.sumstats.gz
+  - id: FEV1
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/FEV1_tidy.ma.sumstats.gz
+  - id: Fasting_glucose
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/FG_combined_1000G_density_formatted_21-03-29.txt_tidy.ma.sumstats.gz
+  - id: Heart_failure
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/HERMES_Jan2019_HeartFailure_summary_data.txt_tidy.ma.sumstats.gz
+  - id: Height
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR_tidy.ma.sumstats.gz
+  - id: Inflammatory_bowel_disease
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/ibd_build37_59957_20161107.txt_splitted.tab_tidy.ma.sumstats.gz
+  - id: Melanoma
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Melanoma_tidy.ma.sumstats.gz
+  - id: BMI
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt_tidy.ma.sumstats.gz
+  - id: Idiopathic_pulmonary_fibrosis
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/meta_gwas_5way_summary_stats.txt_tidy.ma.sumstats.gz
+  - id: Breast_cancer
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/oncoarray_bcac_public_release_oct17.txt_tidy.ma.sumstats.gz
+  - id: Atrial_fibrillation
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/nielsen-thorolfsdottir-willer-NG2018-AFib-gwas-summary-statistics.tbl_tidy.ma.sumstats.gz
+  - id: Parkinsons_disease
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Parkinsons_disease_Chang_2017_NG_tidy.ma.sumstats.gz
+  - id: Glaucoma
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/GCST90011766_buildGRCh37.tsv_tidy.ma.sumstats.gz
+  - id: Coronary_artery_disease
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/GCST90132314_buildGRCh37.tsv_tidy.ma.sumstats.gz
+  - id: Vitamin_D
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Revezetal2020_vitD_tidy.ma.sumstats.gz
+  - id: Prostate_cancer
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Schumacher_Prostate_Cancer_2018_NG.ma.sumstats.gz
+  - id: Systolic_blood_pressure
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Systolic_blood_pressure_tidy.ma.sumstats.gz
+  - id: Testosterone
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Testosterone.imp_tidy.ma.sumstats.gz
+  - id: Vitiligo
+    path: /QRISdata/Q2120/benchmark_gwas_TL_revised/GWAS_ldsc_format/Vitiligo_Jin_2016_NG_tidy.ma.sumstats.gz
+
+
+ANALYSIS_TYPE: # specify what analysis type to run. At least one analysis type needs to be specified.
+  prioritization: True # prioritizes all cell-type annotations in the SPECIFICITY_INPUT datasets
+  conditional: False # performs conditional analysis for selected annotations.
+  heritability: False # [CELLECT-LDSC ONLY] estimates heritability for selected annotations.
+  heritability_intervals: False # [CELLECT-LDSC ONLY] estimates heritability intervals for selected annotations. 'heritability' must be True when enabling heritability_intervals
+
+WINDOW_DEFINITION: # Window definition for mapping gene specificity values to SNPs
+  WINDOW_SIZE_KB:
+    100
+
+GENE_COORD_FILE: # Path to gene coordinates. First five columns must be: ensembl_gene_id, chromosome, start_position, stop_position, strand. No header allowed
+  #/home/s4610929/Q5059/CELLECT/CELLECT/data/shared/hg19pos.symbol.gene.loc.cellex.format.txt
+  #/home/s4610929/Q5059/CELLECT/CELLECT/data/shared/GRCh38pos.ensgid.gene.loc.cellex.format.txt
+  /QRISdata/Q5059/CELLECT/CELLECT/data/shared/gene_coordinates.GRCh37.ensembl_v91.txt
+  #/QRISdata/Q5059/CELLECT/CELLECT/data/shared/GRCh37pos.symbol_id.gene.loc.unique.ensgid.18993.cellex.format.txt
+KEEP_ANNOTS: # [CELLECT-LDSC ONLY] If True, for each specificity input a file containing the SNP:ES (and all overlapping genes) mappings will be saved to output also. If you only want this and do not wish to run the rest of CELLECT add "--until make_annot" to the normal snakemake command
+  True
+
+
+############################################################################################################################
+###################################### HERITABILITY ANALYSIS (LDSC ONLY) ###################################################
+############################################################################################################################
+
+### HERITABILITY_INPUT: list of dictionaries
+# id: dataset input - must correspond to an id in SPECIFICITY_INPUT.
+# annotations: annotations to estimate heritability for
+# NOTE: you can delete or leave these dicts blank if the 'analysis type' is not activated
+# HERITABILITY_INPUT:
+#  - id: mousebraintest
+#    annotations: ['ABC']
+
+############################################################################################################################
+####################################### EFFECTOR GENE ANALYSIS (MAGMA ONLY) #################################################
+############################################################################################################################
+# NOTE: you can delete or leave these dicts blank or as they are if the effector_genes analysis type is not activated
+N_GENES_MAGMA: 1000 # number of top magma genes to include, sorted by p-value in ascending order
+PERCENTILE_CUTOFF_ESMU: 10 # percentile cutoff for non-zero ESmu genes to include, sorted by ESmu value in descending order
+
+#############################################################################################################################
+##################################################### CONSTANTS #############################################################
+#############################################################################################################################
+
+# You generally do not need to change these variables.
+
+LDSC_CONST:
+  DATA_DIR: # Path to the data used for CELLECT-LDSC (baseline model, gene mapping etc).
+    /scratch/project/genetic_data_analysis/uqali4/CELLECT/data/ldsc
+  LDSC_DIR: # Path to the a cloned version of the github repo pascaltimshel/ldsc. This is included as a git submodule.
+    /scratch/project/genetic_data_analysis/uqali4/CELLECT/ldsc
+  NUMPY_CORES: # Numpy by default uses all cores available to it. This variable limits the amount of cores numpy can use to 1 so snakemake has full control over multicore processing via ithe '-j' flag.
+    1
+
+
+MAGMA_CONST:
+  DATA_DIR: # Path to the data used for CELLECT-MAGMA (baseline model, gene mapping etc).
+    /scratch/project/genetic_data_analysis/uqali4/CELLECT/magma
+  NUMPY_CORES: # Numpy by default uses all cores available to it. This variable limits the amount of cores numpy can use to 1 so snakemake has full control over multicore processing via the '-j' flag.
+    1
+  EXCLUDE_MHC: # Exclude genes located in the MHC region (chr6:27Mb-32Mb) during prioritization.
+  # We recommend setting this to True, unless you know what you are doing and analysing immune GWAS traits.
+  # CELLECT-LDSC also does not include genetic signal from the MHC region.
+    True
+
+

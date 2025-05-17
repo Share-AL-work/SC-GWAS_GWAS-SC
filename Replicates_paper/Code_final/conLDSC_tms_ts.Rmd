@@ -1,0 +1,632 @@
+
+rm -r /QRISdata/Q2120/CELLECT_baseline2.1/*/*/CELLECT-LDSC/precomputation
+rm -r /QRISdata/Q2120/CELLECT_baseline2.1/*/*/CELLECT-LDSC/logs
+rm -r /QRISdata/Q2120/CELLECT_baseline2.1/*/*/CELLECT-LDSC/out/annots
+rm /QRISdata/Q2120/CELLECT_baseline2.1/*/*/CELLECT-LDSC/out/prioritization/*.txt
+
+
+rm -r /QRISdata/Q2120/CELLECT_baseline1.1/*/*/CELLECT-LDSC/precomputation
+rm -r /QRISdata/Q2120/CELLECT_baseline1.1/*/*/CELLECT-LDSC/logs
+rm -r /QRISdata/Q2120/CELLECT_baseline1.1/*/*/CELLECT-LDSC/out/annots
+rm /QRISdata/Q2120/CELLECT_baseline1.1/*/*/CELLECT-LDSC/out/prioritization/*.txt
+
+
+# Prepare the metrics
+# Be careful of TDEP specificity being NA in genes, using 0 instead of NA
+
+# Extract target CT based CELLECT input:
+# TS
+```{r}
+
+library(data.table)
+library(dplyr)
+
+# Define the list of metrics
+metrics <- c("cepo_norm", "det.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker", "ep.esw_s", "TDEP")
+
+# Define file paths
+input_dir <- "/scratch/project/genetic_data_analysis/uqali4/benchmark/cellex_out/"
+output_dir <- "/scratch/project/genetic_data_analysis/uqali4/cellex_out/"
+aim_ct_file <- "/home/uqali4/ts_CT_Sep19.txt"
+
+# Read aim_ct (target columns)
+aim_ct <- fread(aim_ct_file, header = FALSE)$V1
+
+# Loop through each metric and apply the logic
+for (metric in metrics) {
+  # Construct input and output file paths
+  input_file <- paste0(input_dir, "ts_pc.", metric, ".csv.gz")
+  output_file <- paste0(output_dir, "ts_conLDSC_target_Sep19_pc.", metric, ".csv")
+  
+  # Read the input file
+  combined_dt <- fread(input_file)
+  names(combined_dt)[1]="gene"
+  
+  # Select "gene" and columns in aim_ct
+  dt_save <- combined_dt %>% select("gene", all_of(aim_ct))
+  # Find rows where any column has NA
+  #rows_with_na <- dt_save[apply(is.na(dt_save), 1, any), ]
+  # Display the rows with NA
+  #dim(rows_with_na)
+  dt_save[is.na(dt_save)] <- 0
+  # Write the output file
+  write.table(dt_save, file = output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+  
+  # Print a message indicating completion
+  cat("Processed:", dim(combined_dt), "\n")
+  cat("Processed:", metric, "\n")
+}
+
+
+```
+
+# TMS
+```{r}
+
+library(data.table)
+library(dplyr)
+
+# Define the list of metrics
+metrics <- c("cepo_norm", "det.esw_s", "esmu", "ges.esw_s", "nsi.esw_s", "sclinker", "ep.esw_s", "TDEP")
+
+# Define file paths
+input_dir <- "/scratch/project/genetic_data_analysis/uqali4/benchmark/cellex_out/"
+output_dir <- "/scratch/project/genetic_data_analysis/uqali4/cellex_out/"
+aim_ct_file <- "/home/uqali4/tms_CT_Sep19.txt"
+
+# Read aim_ct (target columns)
+aim_ct <- fread(aim_ct_file, header = FALSE)$V1
+
+# Loop through each metric and apply the logic
+for (metric in metrics) {
+  # Construct input and output file paths
+  input_file <- paste0(input_dir, "tms_pc.", metric, ".csv.gz")
+  output_file <- paste0(output_dir, "tms_conLDSC_target_Sep19_pc.", metric, ".csv")
+  
+  # Read the input file
+  combined_dt <- fread(input_file)
+  names(combined_dt)[1]="gene"
+  
+  # Select "gene" and columns in aim_ct
+  dt_save <- combined_dt %>% select("gene", all_of(aim_ct))
+  
+  # Write the output file
+  write.table(dt_save, file = output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = ",")
+  
+  # Print a message indicating completion
+  cat("Processed:", dim(combined_dt), "\n")
+  cat("Processed:", metric, "\n")
+}
+
+
+```
+
+# Make a template in ~/Manuscript_Ang/Benchmark_comparison/Code/Code_final/tms_cepo_norm_v1.1.yml
+mkdir -p /QRISdata/Q5514/CELLECT_baseline1.1/op_Sep19_tms_pc/cepo_norm
+
+
+# Do a test:
+```{bash}
+conda activate cellct_2
+mamba activate snakemake
+dir="/scratch/project/genetic_data_analysis/uqali4/new_conda_env/CELLECT"
+config_dir="/home/uqali4/Sep19_scripts"
+cd /scratch/project/genetic_data_analysis/uqali4/CELLECT
+snakemake --use-conda -j 20 -s ${dir}/cellect-ldsc.snakefile --configfile ${config_dir}/tms_Sep19_cepo_norm_v1.1.yml
+
+conda activate cellct_2
+mamba activate snakemake
+dir="/scratch/project/genetic_data_analysis/uqali4/new_conda_env/CELLECT"
+config_dir="/home/uqali4/Sep19_scripts/v2.1"
+cd /scratch/project/genetic_data_analysis/uqali4/CELLECT
+snakemake --use-conda -j 20 -s ${dir}/cellect-ldsc.snakefile --configfile ${config_dir}/TDEP_ts_v2.1.yml
+
+
+conda activate cellct_2
+mamba activate snakemake
+dir="/scratch/project/genetic_data_analysis/uqali4/new_conda_env/CELLECT"
+config_dir="/home/uqali4/Sep19_scripts/v1.1"
+cd /scratch/project/genetic_data_analysis/uqali4/CELLECT
+snakemake --use-conda -j 20 -s ${dir}/cellect-ldsc.snakefile --configfile ${config_dir}/TDEP_ts_v1.1.yml
+
+
+
+```
+
+# Revise the metrics file names:
+```{bash}
+#!/bin/bash
+
+# Directory containing the files
+directory="/scratch/project/genetic_data_analysis/uqali4/cellex_out/"
+
+# List of metrics that need to be revised by replacing '.' with '_'
+metrics=("det.esw_s" "ges.esw_s" "nsi.esw_s" "ep.esw_s")
+
+# List of file prefixes
+file_prefixes=(
+  "tms_conLDSC_target_Sep19_pc"
+  "ts_conLDSC_target_Sep19_pc"
+)
+
+# Loop through each prefix and metric to find and rename files
+for prefix in "${file_prefixes[@]}"; do
+  for metric in "${metrics[@]}"; do
+    # Construct the old filename pattern
+    old_filename="${directory}/${prefix}.${metric}.csv"
+
+    # Construct the new filename by replacing '.' with '_' in the metric
+    new_metric="${metric//./_}"
+    new_filename="${directory}/${prefix}.${new_metric}.csv"
+
+    # Check if the old file exists
+    if [ -f "$old_filename" ]; then
+      # Rename the file
+      echo "Renaming $old_filename to $new_filename"
+      mv "$old_filename" "$new_filename"
+    else
+      echo "File not found: $old_filename"
+    fi
+  done
+done
+
+
+```
+
+
+# Shell Script to Create Directories
+```{bash}
+
+ #!/bin/bash
+
+# Define the file prefixes and metrics
+file_prefixes=("Sep19_tms_pc") 
+
+metrics=("cepo_norm" "det_esw_s" "esmu" "ges_esw_s" "nsi_esw_s" "sclinker" "ep_esw_s" "TDEP")
+
+# Base directory path
+base_dir="/QRISdata/Q5514/CELLECT_baseline1.1"
+
+# Loop through all combinations of prefixes and metrics
+for prefix in "${file_prefixes[@]}"; do
+  for metric in "${metrics[@]}"; do
+    # Construct the full directory path
+    dir_path="${base_dir}/op_${prefix}/${metric}"
+    
+    # Create the directory with mkdir -p
+    mkdir -p "$dir_path"
+    
+    # Print a message indicating the directory creation
+    echo "Created directory: $dir_path"
+  done
+done
+
+####################################################################################################
+
+####################################################################################################
+
+
+file_prefixes=("Sep19_ts_pc")
+
+metrics=("cepo_norm" "det_esw_s" "esmu" "ges_esw_s" "nsi_esw_s" "sclinker" "ep_esw_s" "TDEP")
+
+# Base directory path
+base_dir="/QRISdata/Q2120/CELLECT_baseline1.1"
+
+# Loop through all combinations of prefixes and metrics
+for prefix in "${file_prefixes[@]}"; do
+  for metric in "${metrics[@]}"; do
+    # Construct the full directory path
+    dir_path="${base_dir}/op_${prefix}/${metric}"
+    
+    # Create the directory with mkdir -p
+    mkdir -p "$dir_path"
+    
+    # Print a message indicating the directory creation
+    echo "Created directory: $dir_path"
+  done
+done
+
+
+
+```
+
+
+# Shell Script to Create Directories
+```{bash}
+
+file_prefixes=("Sep19_tms_pc") 
+
+metrics=("cepo_norm" "det_esw_s" "esmu" "ges_esw_s" "nsi_esw_s" "sclinker" "ep_esw_s" "TDEP")
+
+# Base directory path
+base_dir="/QRISdata/Q5514/CELLECT_baseline2.1"
+
+# Loop through all combinations of prefixes and metrics
+for prefix in "${file_prefixes[@]}"; do
+  for metric in "${metrics[@]}"; do
+    # Construct the full directory path
+    dir_path="${base_dir}/op_${prefix}/${metric}"
+    
+    # Create the directory with mkdir -p
+    mkdir -p "$dir_path"
+    
+    # Print a message indicating the directory creation
+    echo "Created directory: $dir_path"
+  done
+done
+
+
+####################################################################################################
+
+####################################################################################################
+
+
+file_prefixes=("Sep19_ts_pc")
+
+metrics=("cepo_norm" "det_esw_s" "esmu" "ges_esw_s" "nsi_esw_s" "sclinker" "ep_esw_s" "TDEP")
+
+# Base directory path
+base_dir="/QRISdata/Q2120/CELLECT_baseline2.1"
+
+# Loop through all combinations of prefixes and metrics
+for prefix in "${file_prefixes[@]}"; do
+  for metric in "${metrics[@]}"; do
+    # Construct the full directory path
+    dir_path="${base_dir}/op_${prefix}/${metric}"
+    
+    # Create the directory with mkdir -p
+    mkdir -p "$dir_path"
+    
+    # Print a message indicating the directory creation
+    echo "Created directory: $dir_path"
+  done
+done
+
+
+
+```
+
+
+```{r}
+setwd("/home/uqali4/Sep19_scripts/v1.1")
+
+# Define the file prefixes and metrics
+file_prefixes <- c("tms")
+metrics <- c("cepo_norm", "det_esw_s", "esmu", "ges_esw_s", "nsi_esw_s", "sclinker", "ep_esw_s", "TDEP")
+
+# Read the template file content
+template_file <- "/home/uqali4/Sep19_scripts/tms_cepo_norm_v1.1.yml"
+template_content <- readLines(template_file)
+
+# Function to generate .yml files
+generate_yml <- function(prefix, metric) {
+    # Step-by-step replacement to ensure correct changes
+    new_content <- template_content
+    
+    # Replace 'tms' with the correct prefix
+    new_content <- gsub("tms", prefix, new_content)
+    
+    # Replace 'cepo_norm' with the correct metric
+    new_content <- gsub("cepo_norm", metric, new_content)
+    
+    # Replace the specific file paths for the metric
+    new_content <- gsub("/QRISdata/Q5514/CELLECT_baseline1.1/op_Sep19_tms_pc/cepo_norm",
+                        paste0("/QRISdata/Q5514/CELLECT_baseline1.1/op_Sep19_", prefix, "_pc/", metric),
+                        new_content)
+    
+    new_content <- gsub("/scratch/project/genetic_data_analysis/uqali4/cellex_out/tms_conLDSC_target_Sep19_pc.cepo_norm.csv",
+                        paste0("/scratch/project/genetic_data_analysis/uqali4/cellex_out/", prefix, "_conLDSC_target_Sep19_pc.", metric, ".csv"),
+                        new_content)
+    
+    # Define the output file name
+    output_file <- paste0(metric, "_", prefix, "_v1.1.yml")
+    
+    # Write the new content to a new .yml file
+    writeLines(new_content, con = output_file)
+}
+
+# Loop through all combinations of prefixes and metrics to generate .yml files
+for (prefix in file_prefixes) {
+    for (metric in metrics) {
+        generate_yml(prefix, metric)
+    }
+}
+
+
+
+##############################################################################
+setwd("/home/uqali4/Sep19_scripts/v2.1")
+
+# Define the file prefixes and metrics
+file_prefixes <- c("tms")
+metrics <- c("cepo_norm", "det_esw_s", "esmu", "ges_esw_s", "nsi_esw_s", "sclinker", "ep_esw_s", "TDEP")
+
+# Read the template file content
+template_file <- "/home/uqali4/Sep19_scripts/tms_cepo_norm_v1.1.yml"
+template_content <- readLines(template_file)
+
+# Function to generate .yml files
+generate_yml <- function(prefix, metric) {
+    # Step-by-step replacement to ensure correct changes
+    new_content <- template_content
+    
+    # Replace 'tms' with the correct prefix
+    new_content <- gsub("tms", prefix, new_content)
+    
+    # Replace 'cepo_norm' with the correct metric
+    new_content <- gsub("cepo_norm", metric, new_content)
+    
+    # Replace '/QRISdata/Q5514/' with '/QRISdata/Q2120/' 
+    # (this ensures the base path is correctly replaced first)
+    new_content <- gsub("CELLECT_baseline1.1", "CELLECT_baseline2.1", new_content)
+    
+    # Replace the specific file paths for the metric
+    new_content <- gsub("/QRISdata/Q5514/CELLECT_baseline2.1/op_Sep19_tms_pc/cepo_norm",
+                        paste0("/QRISdata/Q5514/CELLECT_baseline2.1/op_Sep19_", prefix, "_pc/", metric),
+                        new_content)
+    
+    new_content <- gsub("/scratch/project/genetic_data_analysis/uqali4/cellex_out/tms_conLDSC_target_Sep19_pc.cepo_norm.csv",
+                        paste0("/scratch/project/genetic_data_analysis/uqali4/cellex_out/", prefix, "_conLDSC_target_Sep19_pc.", metric, ".csv"),
+                        new_content)
+    
+    # Define the output file name
+    output_file <- paste0(metric, "_", prefix, "_v2.1.yml")
+    
+    # Write the new content to a new .yml file
+    writeLines(new_content, con = output_file)
+}
+
+# Loop through all combinations of prefixes and metrics to generate .yml files
+for (prefix in file_prefixes) {
+    for (metric in metrics) {
+        generate_yml(prefix, metric)
+    }
+}
+
+
+```
+
+
+
+```{r}
+setwd("/home/uqali4/Sep19_scripts/v1.1")
+
+# Define the file prefixes and metrics
+file_prefixes <- c("ts")
+metrics <- c("cepo_norm", "det_esw_s", "esmu", "ges_esw_s", "nsi_esw_s", "sclinker", "ep_esw_s", "TDEP")
+
+# Read the template file content
+template_file <- "/home/uqali4/Sep19_scripts/tms_cepo_norm_v1.1.yml"
+template_content <- readLines(template_file)
+
+# Function to generate .yml files
+generate_yml <- function(prefix, metric) {
+    # Step-by-step replacement to ensure correct changes
+    new_content <- template_content
+    
+    # Replace 'tms' with the correct prefix
+    new_content <- gsub("tms", prefix, new_content)
+    
+    # Replace 'cepo_norm' with the correct metric
+    new_content <- gsub("cepo_norm", metric, new_content)
+    
+    # Replace '/QRISdata/Q5514/' with '/QRISdata/Q2120/' 
+    # (this ensures the base path is correctly replaced first)
+    new_content <- gsub("/QRISdata/Q5514/", "/QRISdata/Q2120/", new_content)
+    
+    # Replace the specific file paths for the metric
+    new_content <- gsub("/QRISdata/Q2120/CELLECT_baseline1.1/op_Sep19_tms_pc/cepo_norm",
+                        paste0("/QRISdata/Q2120/CELLECT_baseline1.1/op_Sep19_", prefix, "_pc/", metric),
+                        new_content)
+    
+    new_content <- gsub("/scratch/project/genetic_data_analysis/uqali4/cellex_out/tms_conLDSC_target_Sep19_pc.cepo_norm.csv",
+                        paste0("/scratch/project/genetic_data_analysis/uqali4/cellex_out/", prefix, "_conLDSC_target_Sep19_pc.", metric, ".csv"),
+                        new_content)
+    
+    # Define the output file name
+    output_file <- paste0(metric, "_", prefix, "_v1.1.yml")
+    
+    # Write the new content to a new .yml file
+    writeLines(new_content, con = output_file)
+}
+
+# Loop through all combinations of prefixes and metrics to generate .yml files
+for (prefix in file_prefixes) {
+    for (metric in metrics) {
+        generate_yml(prefix, metric)
+    }
+}
+
+
+
+##############################################################################
+setwd("/home/uqali4/Sep19_scripts/v2.1")
+
+# Define the file prefixes and metrics
+file_prefixes <- c("ts")
+metrics <- c("cepo_norm", "det_esw_s", "esmu", "ges_esw_s", "nsi_esw_s", "sclinker", "ep_esw_s", "TDEP")
+
+# Read the template file content
+template_file <- "/home/uqali4/Sep19_scripts/tms_cepo_norm_v1.1.yml"
+template_content <- readLines(template_file)
+
+# Function to generate .yml files
+generate_yml <- function(prefix, metric) {
+    # Step-by-step replacement to ensure correct changes
+    new_content <- template_content
+    
+    # Replace 'tms' with the correct prefix
+    new_content <- gsub("tms", prefix, new_content)
+    
+    # Replace 'cepo_norm' with the correct metric
+    new_content <- gsub("cepo_norm", metric, new_content)
+    
+    # Replace '/QRISdata/Q5514/' with '/QRISdata/Q2120/' 
+    # (this ensures the base path is correctly replaced first)
+    new_content <- gsub("/QRISdata/Q5514/", "/QRISdata/Q2120/", new_content)
+    new_content <- gsub("CELLECT_baseline1.1", "CELLECT_baseline2.1", new_content)
+    
+    # Replace the specific file paths for the metric
+    new_content <- gsub("/QRISdata/Q2120/CELLECT_baseline2.1/op_Sep19_tms_pc/cepo_norm",
+                        paste0("/QRISdata/Q2120/CELLECT_baseline2.1/op_Sep19_", prefix, "_pc/", metric),
+                        new_content)
+    
+    new_content <- gsub("/scratch/project/genetic_data_analysis/uqali4/cellex_out/tms_conLDSC_target_Sep19_pc.cepo_norm.csv",
+                        paste0("/scratch/project/genetic_data_analysis/uqali4/cellex_out/", prefix, "_conLDSC_target_Sep19_pc.", metric, ".csv"),
+                        new_content)
+    
+    # Define the output file name
+    output_file <- paste0(metric, "_", prefix, "_v2.1.yml")
+    
+    # Write the new content to a new .yml file
+    writeLines(new_content, con = output_file)
+}
+
+# Loop through all combinations of prefixes and metrics to generate .yml files
+for (prefix in file_prefixes) {
+    for (metric in metrics) {
+        generate_yml(prefix, metric)
+    }
+}
+
+
+```
+
+
+
+ls /scratch/project/genetic_data_analysis/uqali4/cellex_out/*_conLDSC_target_Sep19_pc.*.csv
+
+
+
+# Submit all combinations
+
+```{bash}
+#!/bin/bash
+conda activate cellct_2
+mamba activate snakemake
+
+# Directories and paths
+dir="/scratch/project/genetic_data_analysis/uqali4/new_conda_env/CELLECT"
+config_dir_v1="/home/uqali4/Sep19_scripts/v1.1"
+config_dir_v2="/home/uqali4/Sep19_scripts/v2.1"
+snakefile_v1="cellect-ldsc.snakefile"
+snakefile_v2="cellect-ldsc_AL.snakefile"
+workdir="/scratch/project/genetic_data_analysis/uqali4/CELLECT"
+
+# List of metrics
+metrics=("cepo_norm" "TDEP" "sclinker" "esmu" "det_esw_s" "ges_esw_s" "nsi_esw_s" "ep_esw_s")
+
+# Function to submit Snakemake jobs for a given version, prefix, and metrics
+submit_jobs_for_prefix() {
+  local config_dir="$1"
+  local snakefile="$2"
+  local prefix="$3"
+  local version="$4"  # Add a parameter for version
+
+  # Loop over all metrics for the given prefix
+  for metric in "${metrics[@]}"; do
+    # Construct the correct pattern to find .yml files containing the prefix and metric
+    config_file="${config_dir}/${metric}_${prefix}_${version}.yml"
+    
+    # Check if the config file exists
+    if [ -f "$config_file" ]; then
+      # Extract the base name of the config file for output readability
+      base_name=$(basename "$config_file")
+      
+      # Print the current job being submitted
+      echo "Submitting job for config file: $base_name"
+      
+      # Submit the Snakemake job
+      snakemake --use-conda -j 20 -s "${dir}/${snakefile}" --configfile "${config_file}"
+    else
+      echo "No config file found for: ${metric}_${prefix}_${version}.yml"
+    fi
+  done
+}
+
+# Activate the environment and change to working directory
+cd $workdir
+
+# Submit jobs for each prefix separately with correct version
+
+
+# Submit jobs for version 1.1
+submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "tms" "v1.1"
+
+# Submit jobs for version 2.1
+submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "tms" "v2.1" 
+
+# Submit jobs for version 1.1
+submit_jobs_for_prefix "$config_dir_v1" "$snakefile_v1" "ts" "v1.1"
+
+# Submit jobs for version 2.1
+submit_jobs_for_prefix "$config_dir_v2" "$snakefile_v2" "ts" "v2.1"
+
+
+
+```
+
+
+# save and merge 
+```{r}
+
+library(dplyr)
+library(readr)
+library(tidyr)
+
+# Define the metrics
+metrics <- c("cepo_norm", "det_esw_s", "esmu", "ges_esw_s", "nsi_esw_s", "sclinker", "ep_esw_s", "TDEP")
+
+# Define the base paths
+base_paths <- list(
+  baseline1.1_tms = "/QRISdata/Q5514/CELLECT_baseline1.1/op_Sep19_tms_pc/",
+  baseline1.1_ts = "/QRISdata/Q2120/CELLECT_baseline1.1/op_Sep19_ts_pc/",
+  baseline2.1_tms = "/QRISdata/Q5514/CELLECT_baseline2.1/op_Sep19_tms_pc/",
+  baseline2.1_ts = "/QRISdata/Q2120/CELLECT_baseline2.1/op_Sep19_ts_pc/"
+)
+
+
+# Function to read and annotate a CSV file
+read_and_annotate <- function(file_path, dataset, metric, baseline) {
+  read_csv(file_path) %>%
+    mutate(Dataset = dataset, Metrics = metric, Baseline = baseline)
+}
+
+# Initialize an empty list to store data frames
+data_list <- list()
+
+# Loop through each base path and metric to read and annotate the data
+for (base_name in names(base_paths)) {
+  base_path <- base_paths[[base_name]]
+  # Extract dataset and baseline from the base_name
+  dataset <- ifelse(grepl("tms", base_name), "tms", "ts")
+  baseline <- ifelse(grepl("baseline1.1", base_name), "v1.1", "v2.1")
+  for (metric in metrics) {
+    file_path <- file.path(base_path, metric, "CELLECT-LDSC/results/prioritization.csv")
+    if (file.exists(file_path)) {
+      data_list[[length(data_list) + 1]] <- read_and_annotate(file_path, dataset, metric, baseline)
+    }
+  }
+}
+
+# Combine all data frames into one
+merged_data <- bind_rows(data_list)
+
+
+# Save the merged data to a new file
+write_csv(merged_data, "/scratch/user/uqali4/tms_ts_conLDSC_Sep19.csv")
+
+```
+
+
+scp -r uqali4@bunya.rcc.uq.edu.au:"/scratch/user/uqali4/tms_ts_conLDSC_Sep19.csv" /Users/uqali4/Manuscripts/Benchmark/Results/
+
+
+
+
+
+
+
+
+

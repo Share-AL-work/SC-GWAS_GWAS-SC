@@ -1,0 +1,1195 @@
+
+# Further and final version based on ~/Manuscript_Ang/Benchmark_comparison/Final_figure/Test_for_CT_specificity.Rmd
+# Draw figure: ~/Manuscript_Ang/Benchmark_comparison/Final_figure/Test_for_CT_specificity.Rmd
+
+# Lung organ
+```{r}
+t1 = load("/QRISdata/Q5514/Benchmark_comparison_May2024/ctd_HLCA_core_healthy_LP_pc.ready.Rdata") #exp_lvl5
+dt = exp_lvl5 %>% filter(Lvl5 %in% c("type I pneumocyte", "type II pneumocyte", 
+                          "CD4-positive, alpha-beta T cell", "CD8-positive, alpha-beta T cell", 
+                          "dendritic cell", 
+                          "plasma cell")) %>% mutate(organ="Lung")
+
+
+gene_cell_counts_df = fread("/QRISdata/Q5729/Human_sc/processed/HLCA_core_healthy_LP_pc.gene_cell_counts.txt") 
+
+dt = inner_join(gene_cell_counts_df,dt)
+
+
+# Use the genes that has cell_counts>1000 in all different data
+# Load the data
+check01 <- fread("/QRISdata/Q2120/benchmark_stat/TS.6cell_type.specificity.txt") %>% 
+  filter(Cell_Count > 1000)
+
+check02 <- fread("/QRISdata/Q2120/benchmark_stat/TS.lung.6cell_type.specificity.txt") %>% 
+  filter(Cell_Count > 1000)
+
+# Find common genes in both check01 and check02
+common_genes <- intersect(check01$Gene, check02$Gene)
+
+# Filter dt based on common genes
+dt_checked <- dt %>% 
+  filter(Gene %in% common_genes)
+
+# View the result
+head(dt_checked)
+
+# Optionally save the filtered result
+write.table(
+  dt_checked,
+  file = "/QRISdata/Q2120/benchmark_stat/dt_checked.txt",
+  sep = "\t",
+  row.names = FALSE,
+  col.names = TRUE,
+  quote = FALSE
+)
+
+
+#
+# Group by Lvl5 and find the Gene with the maximum specificity in each group
+max_specificity_per_lvl5 <- dt_checked%>%filter(Cell_Count>1000) %>%
+  group_by(Lvl5) %>%
+  slice_max(order_by = specificity, n = 1, with_ties = FALSE) %>%
+  ungroup() #%>%
+ # filter(specificity > 0.6 & specificity <= 0.7)
+
+
+head(max_specificity_per_lvl5)
+print(max_specificity_per_lvl5, n = Inf)
+
+write.table(max_specificity_per_lvl5,"/QRISdata/Q2120/benchmark_stat/Lung.HLCA.6cell_type_big_specificity.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+write.table(dt,"/QRISdata/Q2120/benchmark_stat/Lung.HLCA.6cell_type.specificity.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+
+```
+> max_specificity_per_lvl5
+# A tibble: 6 × 6
+  Gene            Cell_Count Lvl5                Expr_sum_mean specificity organ
+  <chr>                <int> <chr>                       <dbl>       <dbl> <chr>
+1 ENSG00000163600       8670 CD4-positive, alph…          170.       0.440 Lung
+2 ENSG00000167286      25305 CD8-positive, alph…         1137.       0.374 Lung
+3 ENSG00000159166      15728 dendritic cell               293.       0.553 Lung
+4 ENSG00000099958       5170 plasma cell                 1127.       0.616 Lung
+5 ENSG00000204305      28622 type I pneumocyte           6583.       0.875 Lung
+6 ENSG00000080618      20701 type II pneumocyte           117.       0.705 Lung
+
+  Gene            Lvl5                           Expr_sum_mean specificity organ
+  <chr>           <chr>                                  <dbl>       <dbl> <chr>
+1 ENSG00000165588 CD4-positive, alpha-beta T ce…       0.0333        1     Lung
+2 ENSG00000002726 dendritic cell                     186.            0.960 Lung
+3 ENSG00000178602 plasma cell                          0.544         1     Lung
+4 ENSG00000064835 type II pneumocyte                   0.00234       1     Lung
+
+Why Specificity is 1 in This Case:
+1. Single Cell Expresses the Gene:
+-The gene is expressed in only one cell ("TGACTTTGTCGCATAT_SC24") with a raw count of 1.
+2. Sum Across All Cells (Total Expression):
+-Since all other cells have zero expression, the total expression (total_expr_sum) equals the expression of that one cell.
+3. Specificity Calculation:
+-In this case:
+specificity = Expr_sum_mean / total_expr_sum
+            = 1 / 1
+            = 1
+4. Interpretation:
+-The gene's expression is entirely specific to the cell type or the sample containing the cell expressing it.
+
+5. Addressing the Issue:
+-To handle cases like this (where specificity might not be meaningful due to low expression data), we can implement a filter or threshold to exclude genes with very low total expression across all cells.
+
+-- Solution: Add Expression Threshold
+```{r}
+# Calculate total expression for the gene across all cells
+gene_total_expression <- sum(assay(sce, "counts")[gene_of_interest, ])
+
+# Only calculate specificity if the total expression exceeds a threshold
+if (gene_total_expression > 10) {  # Example threshold
+  specificity = Expr_sum_mean / total_expr_sum
+} else {
+  specificity = NA  # Or set to 0 or exclude
+}
+
+```
+
+
+# TS full
+```{r}
+# Load the dataset
+load("/QRISdata/Q5514/Benchmark_comparison_May2024/ctd_TabulaSapiens_pc_ortholog_with_TMS_minCell20.TDEP.expression.ready.Rdata")
+
+# Filter the dataset for specific cell types
+selected_cell_types <- c(
+  "type_i_pneumocyte","cd8_positive__alpha_beta_t_cell","type_ii_pneumocyte",
+  "cd4_positive__alpha_beta_t_cell",
+  "dendritic_cell",
+  "plasma_cell"
+)
+# 
+# Filter the data
+dt <- exp_lvl5 %>% filter(Lvl5 %in% selected_cell_types)%>%mutate(organ="Atlas")
+
+gene_cell_counts_df=fread("/QRISdata/Q5059/data/ts/TS_gene_cell_counts.txt") 
+
+dt = inner_join(gene_cell_counts_df,dt)
+write.table(dt,"/QRISdata/Q2120/benchmark_stat/TS.6cell_type.specificity.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+# Group by Lvl5 and find the Gene with the maximum specificity in each group
+max_specificity_per_lvl5 <- dt%>%filter(Cell_Count>1000) %>%
+  group_by(Lvl5) %>%
+  slice_max(order_by = specificity, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+head(max_specificity_per_lvl5)
+
+```
+
+# Calculate EP for Lung only in TS;
+```{r}
+suppressMessages({
+  suppressWarnings({
+    library(SingleCellExperiment)
+    library(EWCE)
+    library(zellkonverter)
+    library(DelayedMatrixStats)
+    library(DelayedArray)
+    library(data.table)
+    library(dplyr)
+    library(tidyverse)
+  })
+})
+
+
+sce_TS <- readH5AD("/QRISdata/Q5059/data/ts/TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad") 
+
+# Subset the SCE object to include only cells from "Lung"
+sce <- sce_TS[, colData(sce_TS)$organ_tissue == "Lung"]
+# Count unique values in 'cell_ontology_class'
+unique_count <- length(unique(colData(sce)$cell_ontology_class))
+print(unique_count)#  37
+
+count_data <- assay(sce, "X")
+assay(sce, "counts") <- assay(sce)
+rowData(sce)$gene <- rownames(rowData(sce))
+
+exp <- counts(sce)
+dexp <- as.matrix(exp)
+
+# Ensure the assay you want to use is set (e.g., "counts")
+gene_expression <- assay(sce, "counts")  # Replace "counts" with the desired assay if different
+
+# Calculate the number of cells where expression > 0 for each gene
+gene_cell_counts <- rowSums(gene_expression > 0)
+
+# Create a data frame with the results
+gene_cell_counts_df <- data.frame(
+  Gene = rownames(sce),  # Gene names
+  Cell_Count = gene_cell_counts  # Number of cells with expression > 0
+)
+
+
+
+# Drop unused levels from cell_ontology_class
+colData(sce)$cell_ontology_class <- droplevels(colData(sce)$cell_ontology_class)
+
+# Verify the updated levels
+updated_levels <- levels(colData(sce)$cell_ontology_class)
+print(updated_levels)
+
+# Check the unique classes used
+unique_classes <- unique(colData(sce)$cell_ontology_class)
+print(unique_classes)
+
+
+library(ggdendro)
+l1 <- colData(sce)$cell_ontology_class
+
+annotLevels <- list(l1 = l1)
+
+fNames_allCELLS_allgenes <- EWCE::generate_celltype_data(
+    exp = dexp,
+    annotLevels = annotLevels,
+    groupName = "TabulaSapiens_pc_ortholog_with_TMS_minCell20_Lung_only",
+    savePath = "/QRISdata/Q5514/Benchmark_comparison_May2024"
+)
+
+
+f <- "/QRISdata/Q5514/Benchmark_comparison_May2024/ctd_TabulaSapiens_pc_ortholog_with_TMS_minCell20_Lung_only.rda"
+load(f)
+
+exp_lvl5 <- as.data.frame(as.matrix(ctd[[1]]$mean_exp))%>%rownames_to_column("Gene")
+
+# Get number of genes that represent 10% of the dataset and convert to long format
+
+n_genes <- length(unique(exp_lvl5$Gene)) # 14273 genes
+n_genes
+
+percentage = 0.1
+n_genes_to_keep <- (n_genes * percentage) %>% round() #1427 genes
+n_genes_to_keep
+
+exp_lvl5 <- exp_lvl5 %>%
+  gather(key = Lvl5,value=Expr_sum_mean,-Gene) %>%
+  as_tibble()
+
+# QC
+### Scale to 1 million molecules, Each cell type is scaled to the same total number of molecules. 
+
+exp_lvl5 <- exp_lvl5 %>% group_by(Lvl5) %>% mutate(Expr_sum_mean=Expr_sum_mean*1e6/sum(Expr_sum_mean))
+
+# Specificity Calculation
+# The specifitiy is defined as the proportion of total expression performed by the cell type of interest (x/sum(x)).
+
+exp_lvl5 <- exp_lvl5 %>% group_by(Gene) %>% 
+  mutate(specificity=Expr_sum_mean/sum(Expr_sum_mean))
+
+# Save expression profile for other processing
+save(exp_lvl5,file = "/QRISdata/Q5514/Benchmark_comparison_May2024/ctd_TabulaSapiens_pc_ortholog_with_TMS_minCell20_Lung_only.TDEP.expression.ready.Rdata")
+
+load("/QRISdata/Q5514/Benchmark_comparison_May2024/ctd_TabulaSapiens_pc_ortholog_with_TMS_minCell20_Lung_only.TDEP.expression.ready.Rdata")
+selected_cell_types <- c(
+   "type_i_pneumocyte",
+   "cd8_positive__alpha_beta_t_cell","type_ii_pneumocyte",
+   "type_ii_pneumocyte",
+  "cd4_positive__alpha_beta_t_cell",
+  "dendritic_cell",
+  "plasma_cell"
+)
+
+# Filter the data
+dt <- exp_lvl5 %>% filter(Lvl5 %in% selected_cell_types)%>%mutate(organ="Atlas-Lung")
+
+gene_cell_counts_df=fread("/QRISdata/Q5059/data/ts/TS_lung_only_gene_cell_counts.txt")
+dt = inner_join(gene_cell_counts_df,dt)
+
+#write.table(
+#  gene_cell_counts_df,
+#  file = "/QRISdata/Q5059/data/ts/TS_lung_only_gene_cell_counts.txt",
+#  sep = "\t",
+#  row.names = FALSE,
+#  col.names = TRUE,
+#  quote = FALSE
+#)
+
+write.table(dt,"/QRISdata/Q2120/benchmark_stat/TS.lung.6cell_type.specificity.txt",row.names=F,col.names=T,quote=F,sep="\t")
+
+
+```
+
+
+# Improvements:
+# 1. Filter Cells with Non-Zero Expression:
+# -- Instead of sampling all cells randomly, restrict the pool to cells where the gene of interest has non-zero expression.
+# 2. Sampling from Non-Zero Expression Pool:
+# -- This ensures the sampled cells are relevant for specificity calculations.
+# 3. Scaling and Specificity Calculation:
+# -- Add checks to handle scenarios where certain cell types have zero expression across all sampled cells.
+
+print(max_specificity_per_lvl5, n = Inf)
+# A tibble: 34 × 5
+   Gene            Lvl5                          Expr_sum_mean specificity organ
+   <chr>           <chr>                                 <dbl>       <dbl> <chr>
+ 1 ENSG00000277586 CD4-positive, alpha-beta T c…        6.26         0.667 Lung
+ 2 ENSG00000112115 CD4-positive, alpha-beta T c…       11.2          0.625 Lung
+ 3 ENSG00000131686 CD4-positive, alpha-beta T c…        0.933        0.624 Lung
+ 4 ENSG00000179934 CD4-positive, alpha-beta T c…        3.27         0.615 Lung
+ 5 ENSG00000105246 dendritic cell                     364.           0.669 Lung
+ 6 ENSG00000126353 dendritic cell                    1612.           0.644 Lung
+ 7 ENSG00000186583 dendritic cell                       7.43         0.640 Lung
+ 8 ENSG00000185686 dendritic cell                       2.03         0.636 Lung
+ 9 ENSG00000253831 dendritic cell                       2.03         0.614 Lung
+10 ENSG00000102970 dendritic cell                    5226.           0.612 Lung
+11 ENSG00000137571 dendritic cell                      83.8          0.608 Lung
+12 ENSG00000015413 plasma cell                         29.4          0.697 Lung
+13 ENSG00000135638 plasma cell                          0.181        0.690 Lung
+14 ENSG00000178445 plasma cell                         12.1          0.688 Lung
+15 ENSG00000277322 plasma cell                          0.181        0.658 Lung
+16 ENSG00000185155 plasma cell                         16.0          0.643 Lung
+17 ENSG00000173585 plasma cell                          8.34         0.641 Lung
+18 ENSG00000137634 plasma cell                          2.54         0.635 Lung
+19 ENSG00000169962 plasma cell                          9.07         0.624 Lung
+20 ENSG00000099958 plasma cell                       1127.           0.616 Lung
+21 ENSG00000131142 plasma cell                          1.63         0.612 Lung
+22 ENSG00000215218 plasma cell                          9.25         0.607 Lung
+23 ENSG00000132429 type II pneumocyte                   5.93         0.697 Lung
+24 ENSG00000171557 type II pneumocyte                 142.           0.683 Lung
+25 ENSG00000144285 type II pneumocyte                  32.6          0.673 Lung
+26 ENSG00000228278 type II pneumocyte                  13.2          0.670 Lung
+27 ENSG00000203837 type II pneumocyte                   0.0843       0.667 Lung
+28 ENSG00000168484 type II pneumocyte              135564.           0.665 Lung
+29 ENSG00000168631 type II pneumocyte                  22.8          0.645 Lung
+30 ENSG00000229314 type II pneumocyte                  54.4          0.626 Lung
+31 ENSG00000159337 type II pneumocyte                   0.141        0.626 Lung
+32 ENSG00000096088 type II pneumocyte                2724.           0.614 Lung
+33 ENSG00000122852 type II pneumocyte               16108.           0.613 Lung
+34 ENSG00000170890 type II pneumocyte                 452.           0.604 Lung
+```{r}
+# Define the gene of interest
+gene_of_interest <- "ENSG00000163600"
+
+sampled_cells <- sample(non_zero_cells, n_cells)  # Ensure 'n_cells <= length(non_zero_cells)'
+
+# Extract expression data for the sampled cells (rows are genes, columns are cells)
+sampled_data <- assay(sce, "counts")[, sampled_cells, drop = FALSE]
+
+# Extract expression data for the gene of interest
+sampled_data_gene <- assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]
+
+# Convert sparse matrix to a dense matrix
+sampled_df_gene <- as.data.frame(as.matrix(t(sampled_data_gene)))
+
+# Add cell IDs
+sampled_df_gene$cell_id <- rownames(sampled_df_gene)
+
+# Add cell types
+sampled_df_gene$cell_type <- colData(sce)$cell_type[match(sampled_df_gene$cell_id, colnames(sce))]
+
+# Rename the expression column
+colnames(sampled_df_gene)[1] <- "Expression"
+
+# Scale expression to 1 million molecules per cell type
+sampled_df_gene <- sampled_df_gene %>%
+  group_by(cell_type) %>%
+  mutate(
+    Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Specificity calculation
+sampled_df_gene <- sampled_df_gene %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)
+  )
+
+# View the results for the single gene
+print(sampled_df_gene)
+
+```
+
+## Lung1
+```{r}
+library(SingleCellExperiment)
+library(dplyr)
+
+# Load the SingleCellExperiment object
+sce <- readH5AD("/QRISdata/Q5729/Human_sc/processed/HLCA_core_healthy_LP_pc.h5ad")
+count_data <- assay(sce, "X")
+assay(sce, "counts") <- assay(sce)
+# Add gene names to rowData
+rowData(sce)$gene <- rownames(rowData(sce))
+
+# Define the gene of interest
+gene_of_interest <- "ENSG00000163600"
+
+# Define the number of cells to sample and the number of replications
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+library(dplyr)
+library(tidyr)
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells)  # Ensure 'n_cells <= length(non_zero_cells)'
+
+  # Extract expression data for the sampled cells (rows are genes, columns are cells)
+  sampled_data <- assay(sce, "counts")[, sampled_cells, drop = FALSE]
+  
+  # Convert to data frame (genes as rows, cells as columns)# Convert sparse matrix to a dense matrix, then to a data frame
+  sampled_df <- as.data.frame(as.matrix(sampled_data))
+  sampled_df$gene <- rownames(sampled_df)  # Add gene names as a column
+
+  # Reshape the data: genes as rows, cells as columns
+  sampled_df <- sampled_df%>%filter(gene==gene_of_interest) %>%
+    pivot_longer(
+      cols = -gene,
+      names_to = "cell_id",
+      values_to = "Expression"
+    )
+
+  # Add cell types
+  sampled_df <- sampled_df %>%
+    mutate(cell_type = colData(sce)$cell_type[match(cell_id, colnames(sce))])
+
+  # Scale expression to 1 million molecules per cell type for each gene
+  sampled_df <- sampled_df %>%
+    group_by(gene, cell_type) %>%
+    mutate(
+      Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)
+    ) %>%
+    ungroup()
+
+  # Specificity calculation
+  sampled_df <- sampled_df %>%
+    group_by(gene) %>%
+    mutate(
+      total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+      specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)
+    ) %>%
+    ungroup()
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+# Save the results
+output_file <- paste0("/QRISdata/Q2120/benchmark_stat/Lung.HLCA.", gene_of_interest, ".final.txt")
+write.table(specificity_combined, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+
+"/QRISdata/Q2120/benchmark_stat/Lung.HLCA.ENSG00000163600.final.txt"
+```
+
+## Lung2
+```{r}
+
+# Define the gene of interest
+gene_of_interest <- "ENSG00000159166"
+
+# Define the number of cells to sample and the number of replications
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+# Loop for replications
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]
+  # Add cell IDs and map corresponding cell types
+  sampled_df <- as.data.frame(as.matrix(sampled_data)) # Keep genes as rows, cells as columns
+  
+  # Create a data frame with cell types and corresponding columns
+  cell_type_mapping <- data.frame(
+    cell_id = colnames(sampled_df),
+    cell_type = colData(sce)$cell_type[match(colnames(sampled_df), colnames(sce))]
+  )
+  
+  # Aggregate expression by cell type
+  sampled_by_cell_type <- aggregate(. ~ cell_type, data = t(sampled_df), sum)
+  rownames(sampled_by_cell_type) <- sampled_by_cell_type$cell_type
+  sampled_by_cell_type <- sampled_by_cell_type[,-1]  # Remove the `cell_type` column
+  
+  # Transpose back to get genes as rows and cell types as columns
+  sampled_by_cell_type <- t(sampled_by_cell_type)
+  
+  # Scale expression for each gene across cell types
+  scaled_by_gene <- sweep(sampled_by_cell_type, 1, rowSums(sampled_by_cell_type, na.rm = TRUE), FUN = "/") * 1e6
+  
+  # Calculate specificity for each gene
+  gene_specificity <- apply(scaled_by_gene, 1, function(x) {
+    total_expr_sum <- sum(x, na.rm = TRUE)
+    if (total_expr_sum > 10) {
+      x / total_expr_sum  # Specificity formula
+    } else {
+      rep(NA, length(x))  # Set to NA if total expression is too low
+    }
+  })
+  
+  # Convert back to a data frame for easier use
+  specificity_results <- as.data.frame(t(gene_specificity))
+  specificity_results$gene <- rownames(specificity_results)  # Add gene names as a column
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+# Save the results
+output_file <- paste0("/QRISdata/Q2120/benchmark_stat/Lung.HLCA.", gene_of_interest, ".final.txt")
+write.table(specificity_combined, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+
+
+```
+
+
+## Lung3
+```{r}
+
+# Define the gene of interest
+gene_of_interest <- "ENSG00000099958"
+
+# Define the number of cells to sample and the number of replications
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+# Loop for replications
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_type <- colData(sce)$cell_type[match(sampled_df$cell_id, colnames(sce))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_type) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+# Save the results
+output_file <- paste0("/QRISdata/Q2120/benchmark_stat/Lung.HLCA.", gene_of_interest, ".final.txt")
+write.table(specificity_combined, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+
+
+```
+
+## Lung4
+```{r}
+
+# Define the gene of interest
+gene_of_interest <- "ENSG00000080618"
+
+# Define the number of cells to sample and the number of replications
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+# Loop for replications
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_type <- colData(sce)$cell_type[match(sampled_df$cell_id, colnames(sce))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  sampled_df$cell_type=as.character(sampled_df$cell_type)
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_type) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+# Save the results
+output_file <- paste0("/QRISdata/Q2120/benchmark_stat/Lung.HLCA.", gene_of_interest, ".final.txt")
+write.table(specificity_combined, output_file, row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+
+
+
+```
+
+
+# TS_lung 1
+```{r}
+suppressMessages({
+  suppressWarnings({
+    library(SingleCellExperiment)
+    library(EWCE)
+    library(zellkonverter)
+    library(DelayedMatrixStats)
+    library(DelayedArray)
+    library(data.table)
+    library(dplyr)
+  })
+})
+
+
+sce_TS <- readH5AD("/QRISdata/Q5059/data/ts/TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad") 
+
+# Subset the SCE object to include only cells from "Lung"
+sce <- sce_TS[, colData(sce_TS)$organ_tissue == "Lung"]
+# Count unique values in 'cell_ontology_class'
+unique_count <- length(unique(colData(sce)$cell_ontology_class))
+print(unique_count)#  37
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000163600"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.lung",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+
+```
+
+# TS_lung 2
+```{r}
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000159166"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.lung",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+```
+
+# TS_lung 3
+```{r}
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000080618"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.lung",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+```
+
+# TS_lung 4
+```{r}
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000099958"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce)[assay(sce, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.lung",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+
+```
+
+
+
+# TS 1
+```{r}
+suppressMessages({
+  suppressWarnings({
+    library(SingleCellExperiment)
+    library(EWCE)
+    library(zellkonverter)
+    library(DelayedMatrixStats)
+    library(DelayedArray)
+    library(data.table)
+    library(dplyr)
+  })
+})
+
+
+sce_TS <- readH5AD("/QRISdata/Q5059/data/ts/TabulaSapiens_pc_ortholog_with_TMS_minCell20.h5ad") 
+assay(sce_TS, "counts") <- assay(sce_TS)
+rowData(sce_TS)$gene <- rownames(rowData(sce_TS))
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000163600"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce_TS)[assay(sce_TS, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce_TS, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce_TS)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce_TS))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+
+```
+
+# TS 2
+```{r}
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000159166"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce_TS)[assay(sce_TS, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce_TS, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce_TS)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce_TS))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+```
+
+# TS 3
+```{r}
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000080618"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce_TS)[assay(sce_TS, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce_TS, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce_TS)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce_TS))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+
+```
+
+# TS 4
+```{r}
+
+# Run the same analysis as before
+gene_of_interest <- "ENSG00000099958"
+
+n_cells <- 1000
+n_replications <- 100
+
+# Initialize a list to store specificity results across replications
+specificity_results <- vector("list", n_replications)
+
+# Filter for cells with non-zero expression for the gene of interest
+non_zero_cells <- colnames(sce_TS)[assay(sce_TS, "counts")[gene_of_interest, ] > 0]
+
+if (length(non_zero_cells) < n_cells) {
+  stop("Not enough cells with non-zero expression for the gene of interest to sample.")
+}
+
+for (i in 1:n_replications) {
+  # Randomly sample 1000 cells from the non-zero expression pool
+  sampled_cells <- sample(non_zero_cells, n_cells) #cannot take a sample larger than the population when 'replace = FALSE'
+  
+  # Extract expression data for the sampled cells
+  sampled_data <- as.matrix(t(assay(sce_TS, "counts")[gene_of_interest, sampled_cells, drop = FALSE]))
+  sampled_df <- as.data.frame(sampled_data)
+  
+  # Add cell IDs and map corresponding cell types
+  sampled_df$cell_id <- rownames(sampled_df)  # Add cell IDs as a column
+  sampled_df$cell_ontology_class <- colData(sce_TS)$cell_ontology_class[match(sampled_df$cell_id, colnames(sce_TS))]
+  
+  # Rename the expression column
+  colnames(sampled_df)[1] <- "Expression"
+  
+  # Scale to 1 million molecules within each cell type
+  sampled_df <- sampled_df %>%
+    group_by(cell_ontology_class) %>%
+    mutate(Expr_sum_mean = Expression * 1e6 / sum(Expression, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Specificity Calculation
+  # Explicitly set specificity to 0 if sum(Expr_sum_mean) for the gene across all cell types is 0
+  sampled_df <- sampled_df %>%
+  ungroup() %>%
+  mutate(
+    total_expr_sum = sum(Expr_sum_mean, na.rm = TRUE),
+    specificity = ifelse(total_expr_sum > 10, Expr_sum_mean / total_expr_sum, NA)  # Threshold of 10
+  )
+
+  # Store the result
+  specificity_results[[i]] <- sampled_df
+}
+# Combine all results into a single data frame
+specificity_combined <- bind_rows(specificity_results, .id = "Replication")
+# Check results
+head(specificity_combined)
+
+write.table(specificity_combined,paste0("/QRISdata/Q2120/benchmark_stat/Atlas.",gene_of_interest,".final.txt"),row.names=F,col.names=T,quote=F,sep="\t")
+
+```
+
+
+
+
+
+
+
+
