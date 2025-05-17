@@ -91,7 +91,7 @@ echo "✓ Pipeline finished — meta P‑values in results/pvalue_cauchy_combine
 ```
 
 ## 4. Code to reproduce results of the paper:
-* **[Replicates paper documents](https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/tree/main/Replicates_paper)
+* [Replicates paper documents](https://github.com/Share-AL-work/SC-GWAS_GWAS-SC/tree/main/Replicates_paper)
 
 
 
