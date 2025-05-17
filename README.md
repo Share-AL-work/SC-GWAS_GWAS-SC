@@ -17,7 +17,7 @@ You can find full details of the preprocessing step in the [preprocess documenta
 
 All absolute paths are replaced by a single editable `config.yml`.
 
-#### Quick start (all stages)
+#### Quick start (all stages) with install
 
 ```bash
 git clone --recurse-submodules https://github.com:Share-AL-work/SC-GWAS_GWAS-SC.git
@@ -90,7 +90,7 @@ Rscript bin/07_cauchy_combine.R  config.yml
 echo "✓ Pipeline finished — meta P‑values in results/pvalue_cauchy_combined.tsv"
 ```
 
-####  Code and data to reproduce results of the paper is coming soon...
+####  Code to reproduce results of the paper is in Replicates_paper directory
 
 
 
