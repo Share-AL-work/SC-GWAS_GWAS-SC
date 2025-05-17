@@ -5,7 +5,7 @@ This repo ties together:
 * **mBAT‑combo based scDRS**
 * **Binary‑sLDSC** (unmodified fork of <https://github.com/jbryois/scRNA_disease>)  
 * **Continuous‑sLDSC** (Bash + R around pascaltimshel/ldsc @ d869cfd)  
-* **MAGMA‑GSEA**(binary annotation,unmodified fork of <https://github.com/jbryois/scRNA_disease>),
+* **MAGMA‑GSEA**(binary annotation,unmodified fork of <https://github.com/jbryois/scRNA_disease>)
 
 ## 1.Preprocess the GWAS summary data:
 * COJO format: follow the section in https://github.com/zlintian/SBayesRC_pipeline
