@@ -1,4 +1,4 @@
-# SC-GWAS:GWAS-SC pipeline
+# SC-GWAS:GWAS-SC pipeline [Final version coming soon...]
 This repo ties together:
 
 * **a Cauchy combination analysis layer for below:**
