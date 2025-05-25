@@ -1,7 +1,3 @@
-scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/geneset_res/PCgenes_background/TMS_TS_PC_allCT_8metrics_MAGMAgeneset.txt /Users/uqali4/Manuscripts/Benchmark/
-
-scp -r uqali4@bunya.rcc.uq.edu.au:/scratch/user/uqali4/geneset_res/PCgenes_background/All_organ_CT_PC_8metrics_MAGMAgeneset_results.txt /Users/uqali4/Manuscripts/Benchmark/
-
 
 # Pipeline for TS and TMS based MAGMA gene-set based tests:
 metrics_dirs=("TDEP" "cepo_norm" "det.esw_s" "ep.esw_s" "esmu" "ges.esw_s" "nsi.esw_s" "sclinker")
