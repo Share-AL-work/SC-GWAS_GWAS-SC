@@ -620,11 +620,6 @@ write_csv(merged_data, "/scratch/user/uqali4/tms_ts_conLDSC_Sep19.csv")
 ```
 
 
-scp -r uqali4@bunya.rcc.uq.edu.au:"/scratch/user/uqali4/tms_ts_conLDSC_Sep19.csv" /Users/uqali4/Manuscripts/Benchmark/Results/
-
-
-
-
 
 
 
